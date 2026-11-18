@@ -1,0 +1,25 @@
+{
+  "width": 7, "height": 5, "blocked": [],
+  "items": [
+    {"name": "凹形0", "value": 50, "adjBonus": true, "type": "U"},
+    {"name": "L形1", "value": 25, "type": "L"},
+    {"name": "T形2", "value": 44, "adjBonus": true, "type": "T"},
+    {"name": "方形3", "value": 44, "type": "O"},
+    {"name": "T形4", "value": 8, "adjBonus": true, "type": "T"},
+    {"name": "小L5", "value": 17, "border": "top", "adjBonus": true, "type": "V"},
+    {"name": "L形6", "value": 16, "adjBonus": true, "type": "L"},
+    {"name": "小L7", "value": 6, "type": "V"},
+    {"name": "小L8", "value": 31, "type": "V"},
+    {"name": "方形9", "value": 48, "adjBonus": true, "type": "O"},
+    {"name": "方形10", "value": 24, "type": "O"},
+    {"name": "T形11", "value": 17, "border": "right", "type": "T"},
+    {"name": "T形12", "value": 22, "border": "right", "adjBonus": true, "type": "T"},
+    {"name": "小L13", "value": 20, "adjBonus": true, "type": "V"},
+    {"name": "方形14", "value": 45, "type": "O"},
+    {"name": "小L5_dup0", "value": 17, "border": "top", "adjBonus": true, "type": "V"},
+    {"name": "方形14_dup1", "value": 45, "type": "O"},
+    {"name": "方形3_dup2", "value": 44, "type": "O"},
+    {"name": "T形4_dup3", "value": 8, "adjBonus": true, "type": "T"},
+    {"name": "方形9_dup4", "value": 48, "adjBonus": true, "type": "O"}
+  ]
+}

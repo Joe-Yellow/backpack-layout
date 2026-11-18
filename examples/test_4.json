@@ -1,0 +1,11 @@
+{
+  "width": 7,
+  "height": 5,
+  "blocked": [[0,0],[0,4],[6,0],[6,4]],
+  "items": [
+    {"name": "凹",  "value": 56, "type": "U", "adjBonus": true},
+    {"name": "F", "value": 45, "type": "F", "border": "top"},
+    {"name": "F", "value": 54, "type": "F"},
+    {"name": "F",  "value": 54, "type": "F"}
+  ]
+}
