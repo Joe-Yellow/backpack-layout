@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>背包排布 · 精确求解</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --paper: #f3eee4;
+    --paper-deep: #e8e0d0;
+    --card: #fbf8f2;
+    --ink: #1f1c17;
+    --ink-soft: #5d574c;
+    --rule: #cfc5b2;
+    --accent: #c4402a;
+    --accent-ink: #fff8f0;
+    --ok: #2f6b3f;
+    --shadow: 0 1px 0 #fff inset, 0 10px 30px -18px rgba(40, 30, 10, .45);
+    --radius-s: 4px;
+    --radius-l: 14px;
+    --font-sans: "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    --font-display: "Iowan Old Style", "Palatino Linotype", "Songti SC", "SimSun", Georgia, serif;
+    --font-mono: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace;
+    --ease: cubic-bezier(.2, .8, .2, 1);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); font: 15px/1.5 var(--font-sans);
+    background:
+      radial-gradient(circle at 1px 1px, rgba(31, 28, 23, .07) 1px, transparent 0) 0 0 / 18px 18px,
+      linear-gradient(180deg, var(--paper), var(--paper-deep));
+    min-height: 100vh;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .masthead {
+    display: flex; align-items: end; justify-content: space-between; gap: 24px;
+    max-width: 1320px; margin: 0 auto; padding: 36px 32px 18px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .kicker { margin: 0; font: 600 11px/1 var(--font-mono); letter-spacing: .28em; color: var(--accent); }
+  h1 { margin: 6px 0 0; font: 700 44px/1 var(--font-display); letter-spacing: .02em; }
+  h1 small { font: 400 15px var(--font-sans); color: var(--ink-soft); margin-left: 14px; letter-spacing: 0; }
+  h2 { margin: 0; font: 700 22px/1.2 var(--font-display); }
+  .file-actions { display: flex; gap: 8px; }
+
+  .btn {
+    border: 1.5px solid var(--ink); background: var(--card); border-radius: var(--radius-s);
+    padding: 7px 14px; cursor: pointer; transition: transform .15s var(--ease), background .15s;
+  }
+  .btn:hover { background: #fff; transform: translateY(-1px); }
+  .btn:active { transform: translateY(1px); }
+  .btn.link { white-space: nowrap; border-color: transparent; background: none; color: var(--ink-soft); font-size: 13px; padding: 4px 8px; }
+  .btn.link:hover { color: var(--ink); background: none; text-decoration: underline; }
+  .btn.primary {
+    background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+    padding: 11px 26px; font-weight: 700; letter-spacing: .08em; box-shadow: 0 6px 0 -2px #8e2a1a;
+  }
+  .btn.primary:hover { background: #d24a33; }
+  .btn.primary.cancel { background: var(--ink); border-color: var(--ink); box-shadow: 0 6px 0 -2px #000; }
+  .btn.primary:disabled { background: var(--ink-soft); border-color: var(--ink-soft); box-shadow: none; cursor: progress; transform: none; }
+
+  .desk {
+    display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 28px;
+    max-width: 1320px; margin: 0 auto; padding: 28px 32px 60px; align-items: start;
+  }
+  @media (max-width: 1000px) {
+    .desk { grid-template-columns: 1fr; }
+  }
+  .card { background: var(--card); border: 1.5px solid var(--ink); border-radius: var(--radius-l); box-shadow: var(--shadow); }
+
+  .board-card { padding: 22px 26px 26px; }
+  /* keep the board in view beside the item list; only in two columns, where nothing is below it */
+  @media (min-width: 1001px) { .board-card { position: sticky; top: 16px; } }
+  .board-head { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-bottom: 18px; }
+  .dims { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); }
+  .dims input { width: 54px; padding: 4px 6px; border: 1.5px solid var(--rule); border-radius: var(--radius-s); background: #fff; text-align: center; }
+  .hint { color: var(--ink-soft); font-size: 13px; }
+
+  .board-wrap { overflow-x: auto; padding: 4px 2px 10px; }
+  .board {
+    --cell: min(60px, calc((100vw - 64px) / var(--cols))); /* shrink to fit narrow screens */
+    display: grid; grid-template-columns: repeat(var(--cols), var(--cell)); gap: 0;
+    width: max-content; border: 2.5px solid var(--ink); background: #fff;
+  }
+  .cell {
+    width: var(--cell); height: var(--cell); border: 0; padding: 0; margin: 0; position: relative;
+    background: #fff; box-shadow: inset 0 0 0 .5px var(--rule); cursor: pointer;
+    transition: filter .15s;
+  }
+  .cell:hover { filter: brightness(.94); }
+  .cell.blocked {
+    background: repeating-linear-gradient(45deg, var(--ink) 0 3px, #3a352c 3px 9px);
+    background-attachment: fixed;
+  }
+  .cell.piece {
+    background: repeating-linear-gradient(-45deg, #ece4d4 0 6px, #ded3bf 6px 12px);
+    background-attachment: fixed; /* one stripe field for the whole page, so the two halves join seamlessly */
+  }
+  .cell .tag {
+    position: absolute; left: 5px; top: 4px; right: 4px; text-align: left; pointer-events: none;
+    font: 700 clamp(9px, calc(var(--cell) * .2), 12px)/1.15 var(--font-mono); color: #fff; text-shadow: 0 1px 0 rgba(0, 0, 0, .25);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cell .tag small { display: block; font: 500 clamp(8px, calc(var(--cell) * .17), 10px)/1.2 var(--font-sans); opacity: .9; }
+  .cell.piece .tag { color: var(--ink); text-shadow: none; }
+  .solve-bar { display: flex; align-items: center; gap: 16px; margin-top: 20px; flex-wrap: wrap; }
+  .status { font: 13px var(--font-mono); color: var(--ink-soft); }
+  .status.ok { color: var(--ok); font-weight: 700; }
+  .status.err { color: var(--accent); font-weight: 700; }
+
+  .total { display: flex; align-items: baseline; gap: 12px; margin-top: 22px; padding-top: 16px; border-top: 1.5px dashed var(--rule); }
+  .total[hidden] { display: none; }
+  .total .num { font: 700 56px/1 var(--font-display); }
+  .total .lbl { font-size: 13px; color: var(--ink-soft); }
+  .total .proof { margin-left: auto; font: 600 12px var(--font-mono); color: var(--ok); border: 1.5px solid var(--ok); padding: 3px 8px; border-radius: 999px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  .breakdown { margin-top: 14px; font-size: 13px; }
+  .breakdown th { text-align: left; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); border-bottom: 1.5px solid var(--ink); padding: 6px 4px; }
+  .breakdown td { padding: 5px 4px; border-bottom: 1px solid var(--rule); }
+  .breakdown td.num { font-family: var(--font-mono); text-align: right; }
+  .breakdown th.num { text-align: right; }
+  .breakdown .plus { color: var(--ok); }
+  .chip { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+  .items-card { padding: 22px 0 10px; }
+  .items-card > header { padding: 0 26px 6px; display: flex; align-items: baseline; justify-content: space-between; }
+  .count { font: 12px var(--font-mono); color: var(--ink-soft); }
+  .palette-label { margin: 10px 26px 0; font-size: 13px; color: var(--accent); font-weight: 600; }
+  .palette { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; padding: 8px 26px 20px; border-bottom: 1.5px solid var(--ink); }
+  .shape-btn {
+    display: grid; justify-items: center; gap: 6px; padding: 12px 4px 8px; cursor: pointer;
+    background: #fff; border: 1.5px solid var(--rule); border-radius: 10px;
+    transition: transform .18s var(--ease), border-color .18s, box-shadow .18s;
+  }
+  .shape-btn:hover { transform: translateY(-3px); border-color: var(--ink); box-shadow: 0 8px 16px -10px rgba(0, 0, 0, .5); }
+  .shape-btn:active { transform: translateY(0); }
+  .shape-btn b { font: 700 15px var(--font-mono); }
+  .shape-btn svg { height: 44px; width: auto; }
+
+  .items { font-size: 14px; }
+  .items th { text-align: left; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); padding: 10px 6px; }
+  .items th:first-child, .items td:first-child { padding-left: 26px; }
+  .items th:last-child, .items td:last-child { padding-right: 20px; }
+  .items td { padding: 6px; border-top: 1px solid var(--rule); vertical-align: middle; }
+  .items tbody tr { transition: background .15s; }
+  .items tbody tr:hover { background: #fff; }
+  .items input[type=text], .items input[type=number], .items select {
+    width: 100%; padding: 5px 7px; border: 1.5px solid transparent; border-radius: var(--radius-s); background: transparent;
+  }
+  .items input:hover, .items select:hover { border-color: var(--rule); background: #fff; }
+  .items input:focus, .items select:focus { border-color: var(--ink); background: #fff; outline: none; }
+  .items input[type=number] { font-family: var(--font-mono); }
+  .type-cell { display: flex; align-items: center; gap: 8px; }
+  .type-cell svg { width: 40px; height: 28px; flex: none; } /* fixed box; viewBox centers any shape inside */
+  .type-cell select { width: auto; font-family: var(--font-mono); font-weight: 700; }
+  .used { font: 11px var(--font-mono); color: var(--ok); white-space: nowrap; }
+  .used.none { color: var(--ink-soft); }
+  .del { border: 0; background: none; cursor: pointer; color: var(--ink-soft); font-size: 18px; line-height: 1; padding: 4px 8px; border-radius: var(--radius-s); }
+  .del:hover { color: var(--accent); background: #f4e1dc; }
+  .empty { padding: 26px; margin: 0; color: var(--ink-soft); text-align: center; }
+  .empty[hidden] { display: none; }
+
+  .colophon { max-width: 1320px; margin: 0 auto; padding: 0 32px 40px; font-size: 12px; color: var(--ink-soft); }
+  @media (max-width: 700px) {
+    .masthead { padding: 20px 16px 12px; align-items: flex-start; }
+    h1 { font-size: 32px; }
+    .kicker { letter-spacing: .14em; }
+    h1 small { display: block; margin: 8px 0 0; }
+    .desk { padding: 16px 12px 32px; gap: 16px; }
+    .board-card { padding: 16px; }
+    .board-head { gap: 10px; margin-bottom: 12px; }
+    .total { flex-wrap: wrap; }
+    .total .num { font-size: 44px; }
+    .total .proof { margin-left: 0; }
+    .items-card > header { padding: 0 16px 6px; }
+    .palette-label { margin: 8px 16px 0; }
+    .palette { gap: 6px; padding: 8px 16px 16px; }
+    .shape-btn { padding: 8px 2px 6px; }
+    .shape-btn svg { height: 30px; }
+    .colophon { padding: 0 16px 32px; }
+    /* 16px inputs: iOS zooms the page when focusing anything smaller */
+    input, select { font-size: 16px; }
+
+    /* item table becomes one card per item: shape + name, then value / border / bonus / count */
+    .items thead { display: none; }
+    .items, .items tbody { display: block; }
+    .items tr {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px;
+      position: relative; padding: 12px 48px 12px 16px; border-top: 1px solid var(--rule);
+    }
+    .items td, .items td:first-child, .items td:last-child { display: block; padding: 0; border: 0; }
+    .items td::before {
+      content: attr(data-label); display: block; margin-bottom: 2px;
+      font: 600 10px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft);
+    }
+    /* shape icon + select need ~100px: give them two of the four columns */
+    .items td:nth-child(1) { grid-column: 1 / 3; }
+    .items td:nth-child(2) { grid-column: 3 / 5; }
+    .items td:last-child { position: absolute; top: 10px; right: 8px; }
+    .items td:last-child::before { display: none; }
+    .items td.check { text-align: left !important; }
+    .items input[type=text], .items input[type=number], .items select { border-color: var(--rule); background: #fff; }
+    .items input[type=checkbox] { width: 22px; height: 22px; margin: 6px 0 0; }
+    .del { font-size: 22px; padding: 6px 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div>
+    <p class="kicker">2D KNAPSACK · EXACT SOLVER</p>
+    <h1>背包排布<small>全局最优 · 可证明</small></h1>
+  </div>
+  <nav class="file-actions" aria-label="文件">
+    <button class="btn link" id="importBtn" type="button" title="可选：从文件载入之前保存的配置">导入</button>
+    <button class="btn link" id="exportBtn" type="button" title="可选：把当前配置保存成文件">导出</button>
+    <input type="file" id="importFile" accept=".json,application/json" hidden>
+  </nav>
+</header>
+
+<main class="desk">
+  <section class="card board-card" aria-labelledby="board-h">
+    <div class="board-head">
+      <h2 id="board-h">棋盘</h2>
+      <div class="dims">
+        <label>宽 <input id="w" type="number" min="1" max="12"></label>×
+        <label>高 <input id="h" type="number" min="1" max="12"></label>
+      </div>
+      <span class="hint">点击格子切换禁用格</span>
+    </div>
+    <div class="board-wrap"><div id="board" class="board" role="grid" aria-label="棋盘"></div></div>
+    <div class="solve-bar">
+      <button class="btn primary" id="solveBtn" type="button">求最优解</button>
+      <span class="status" id="status" role="status"></span>
+    </div>
+    <div class="total" id="total" hidden>
+      <span class="num" id="totalNum"></span><span class="lbl">总价值</span>
+      <span class="proof" id="proof"></span>
+    </div>
+    <div class="breakdown" id="breakdown"></div>
+  </section>
+
+  <section class="card items-card" aria-labelledby="items-h">
+    <header><h2 id="items-h">物品</h2><span class="count" id="count"></span></header>
+    <p class="palette-label">点击形状添加物品 ↓</p>
+    <div class="palette" id="palette" aria-label="添加物品"></div>
+    <table class="items">
+      <thead><tr><th>形状</th><th>名称</th><th style="width:78px">价值</th><th style="width:96px">边界奖励</th><th style="width:52px">邻接</th><th style="width:66px">数量</th><th style="width:40px"></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="empty" id="emptyHint">点击上方形状添加物品</p>
+  </section>
+</main>
+<footer class="colophon">
+  所有计算都在你的浏览器本地完成（WebAssembly 多线程），数据不会上传。物品越少、空间越挤，求解可能越久。
+</footer>
+
+<script type="module">
+const STORE = "knapsack-ui-v1";
+const MAX_SIDE = 12, MAX_ITEMS = 63;
+const COLORS = { U: "#2f6690", F: "#c8553d", L: "#4f7d4e", T: "#7b4b94", O: "#b8860b", V: "#2f8582" };
+const BORDERS = [["", "无"], ["top", "上"], ["bottom", "下"], ["left", "左"], ["right", "右"]];
+const $ = (s) => document.querySelector(s);
+
+// Built-in shapes; must match SHAPES in solver-rs/src/problem.rs.
+const SHAPES = {
+  U: [[0, 0], [1, 0], [2, 0], [0, 1], [2, 1]],
+  F: [[0, 0], [1, 0], [2, 0], [1, 1], [2, 1]],
+  L: [[0, 0], [1, 0], [2, 0], [0, 1]],
+  T: [[0, 0], [1, 0], [2, 0], [1, 1]],
+  O: [[0, 0], [1, 0], [0, 1], [1, 1]],
+  V: [[0, 0], [1, 0], [0, 1]],
+};
+let worker = null;        // solver worker while a solve is running
+let result = null;        // last solution from the server
+let resultRows = [];      // expanded item index -> row index, for the last solution
+let state = loadState();
+
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE));
+    if (s && Array.isArray(s.items)) return s;
+  } catch (e) { /* fall through to default */ }
+  return { width: 7, height: 5, blocked: corners(7, 5), items: [] };
+}
+function corners(w, h) {
+  const out = [];
+  for (const [x, y] of [[0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1]]) {
+    if (!out.some(([a, b]) => a === x && b === y)) out.push([x, y]);
+  }
+  return out;
+}
+const sameCells = (a, b) => a.length === b.length && a.every(([x, y]) => b.some(([u, v]) => u === x && v === y));
+function save() { localStorage.setItem(STORE, JSON.stringify(state)); }
+function invalidate() { result = null; save(); render(); }
+
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+
+function shapeSvg(type, unit = 12) {
+  const cells = SHAPES[type] || [];
+  const w = Math.max(...cells.map((c) => c[0])) + 1, h = Math.max(...cells.map((c) => c[1])) + 1;
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${w * unit} ${h * unit}`);
+  svg.setAttribute("aria-hidden", "true");
+  for (const [x, y] of cells) {
+    const r = document.createElementNS(ns, "rect");
+    Object.entries({ x: x * unit + 1, y: y * unit + 1, width: unit - 2, height: unit - 2, rx: 1.5, fill: COLORS[type] })
+      .forEach(([k, v]) => r.setAttribute(k, v));
+    svg.append(r);
+  }
+  return svg;
+}
+
+/* ---------- board ---------- */
+function rowColor(row) {
+  const it = state.items[row];
+  const base = COLORS[it.type];
+  const sameBefore = state.items.slice(0, row).filter((o) => o.type === it.type).length;
+  const mix = [0, 22, 40, 12, 30][sameBefore % 5];
+  return `color-mix(in oklab, ${base}, white ${mix}%)`;
+}
+
+function renderBoard() {
+  const board = $("#board");
+  board.style.setProperty("--cols", state.width);
+  board.replaceChildren();
+  const blocked = new Set(state.blocked.map(([x, y]) => `${x},${y}`));
+  const owner = new Map();
+  const tags = new Map();
+  if (result) {
+    result.items.forEach((it) => {
+      const id = "i" + it.index;
+      it.cells.forEach(([x, y]) => owner.set(`${x},${y}`, { id, color: rowColor(resultRows[it.index]) }));
+      const [fx, fy] = firstCell(it.cells);
+      tags.set(`${fx},${fy}`, [String(it.finalValue), it.name]);
+    });
+    result.pieces.forEach((pc, j) => {
+      pc.cells.forEach(([x, y]) => owner.set(`${x},${y}`, { id: "p" + j, piece: true }));
+      const [fx, fy] = firstCell(pc.cells);
+      tags.set(`${fx},${fy}`, [pc.value > 0 ? "+" + pc.value : "0", null]);
+    });
+  }
+  const ink = "var(--ink)";
+  for (let y = 0; y < state.height; y++) {
+    for (let x = 0; x < state.width; x++) {
+      const key = `${x},${y}`, o = owner.get(key);
+      const cell = el("button", {
+        class: "cell" + (blocked.has(key) ? " blocked" : "") + (o && o.piece ? " piece" : ""),
+        type: "button", role: "gridcell",
+        "aria-label": `第 ${y + 1} 行 第 ${x + 1} 列${blocked.has(key) ? "（禁用）" : ""}`,
+        onclick: () => toggleBlocked(x, y),
+      });
+      if (o) {
+        if (!o.piece) cell.style.background = o.color;
+        const same = (dx, dy) => (owner.get(`${x + dx},${y + dy}`) || {}).id === o.id;
+        const sh = [];
+        if (!same(0, -1)) sh.push(`inset 0 2.5px 0 ${ink}`);
+        if (!same(0, 1)) sh.push(`inset 0 -2.5px 0 ${ink}`);
+        if (!same(-1, 0)) sh.push(`inset 2.5px 0 0 ${ink}`);
+        if (!same(1, 0)) sh.push(`inset -2.5px 0 0 ${ink}`);
+        cell.style.boxShadow = sh.join(",") || "none";
+      }
+      const t = tags.get(key);
+      if (t) cell.append(el("span", { class: "tag" }, t[0], t[1] ? el("small", {}, t[1]) : null));
+      board.append(cell);
+    }
+  }
+}
+
+function firstCell(cells) {
+  return [...cells].sort((a, b) => a[1] - b[1] || a[0] - b[0])[0];
+}
+
+function toggleBlocked(x, y) {
+  const i = state.blocked.findIndex(([bx, by]) => bx === x && by === y);
+  if (i >= 0) state.blocked.splice(i, 1); else state.blocked.push([x, y]);
+  invalidate();
+}
+
+/* ---------- items ---------- */
+function renderPalette() {
+  $("#palette").replaceChildren(...Object.keys(SHAPES).map((t) =>
+    el("button", { class: "shape-btn", type: "button", "aria-label": `添加 ${t} 形物品`, onclick: () => addItem(t) },
+      shapeSvg(t, 13), el("b", {}, t))));
+}
+
+function addItem(type) {
+  state.items.push({ type, name: "", value: 30, border: "", adj: false, qty: 1 });
+  invalidate();
+  const inputs = document.querySelectorAll("#rows tr:last-child input[type=text]");
+  if (inputs.length) inputs[0].focus();
+}
+
+function renderRows() {
+  const usedByRow = new Map();
+  if (result) result.items.forEach((it) => {
+    const r = resultRows[it.index];
+    usedByRow.set(r, (usedByRow.get(r) || 0) + 1);
+  });
+  const rows = state.items.map((it, r) => {
+    const set = (k, parse = (v) => v) => (e) => { it[k] = parse(e.target.type === "checkbox" ? e.target.checked : e.target.value); invalidate(); };
+    const typeSel = el("select", { "aria-label": "形状", onchange: set("type") },
+      ...Object.keys(SHAPES).map((t) => el("option", { value: t, selected: t === it.type }, t)));
+    const borderSel = el("select", { "aria-label": "边界奖励", onchange: set("border") },
+      ...BORDERS.map(([v, l]) => el("option", { value: v, selected: v === it.border }, l)));
+    const used = result ? usedByRow.get(r) || 0 : null;
+    return el("tr", {},
+      el("td", { "data-label": "形状" }, el("div", { class: "type-cell" }, shapeSvg(it.type, 9), typeSel)),
+      el("td", { "data-label": "名称" },
+        el("input", { type: "text", value: it.name, placeholder: `${it.type}${r + 1}`, "aria-label": "名称", onchange: set("name") }),
+        used == null ? null : el("span", { class: "used" + (used ? "" : " none") }, used ? `已用 ${used}/${it.qty}` : "未使用")),
+      el("td", { "data-label": "价值" }, el("input", { type: "number", min: 0, step: 1, value: it.value, "aria-label": "价值", onchange: set("value", toInt) })),
+      el("td", { "data-label": "边界" }, borderSel),
+      el("td", { class: "check", "data-label": "邻接", style: "text-align:center" }, el("input", { type: "checkbox", checked: it.adj, "aria-label": "邻接奖励", onchange: set("adj") })),
+      el("td", { "data-label": "数量" }, el("input", { type: "number", min: 1, max: MAX_ITEMS, step: 1, value: it.qty, "aria-label": "数量", onchange: set("qty", (v) => Math.max(1, toInt(v))) })),
+      el("td", {}, el("button", { class: "del", type: "button", "aria-label": "删除", onclick: () => { state.items.splice(r, 1); invalidate(); } }, "×")));
+  });
+  $("#rows").replaceChildren(...rows);
+  $("#emptyHint").hidden = rows.length > 0;
+  const total = state.items.reduce((s, it) => s + it.qty, 0);
+  $("#count").textContent = `${state.items.length} 种 · 共 ${total} 件`;
+}
+
+function toInt(v) { const n = Math.floor(Number(v)); return Number.isFinite(n) && n >= 0 ? n : 0; }
+
+/* ---------- result ---------- */
+function renderResult() {
+  $("#total").hidden = !result;
+  if (!result) { $("#breakdown").replaceChildren(); return; }
+  $("#totalNum").textContent = result.total;
+  $("#proof").textContent = `已证明最优 · ${result.seconds.toFixed(1)}s · ${result.rounds} 轮`;
+  const itemRows = [...result.items].sort((a, b) => b.finalValue - a.finalValue).map((it) =>
+    el("tr", {},
+      el("td", {}, el("span", { class: "chip", style: `background:${rowColor(resultRows[it.index])}` }), it.name),
+      el("td", {}, it.type || "—"),
+      el("td", { class: "num" }, String(it.value)),
+      el("td", { class: "num plus" }, it.finalValue > it.value ? "+" + (it.finalValue - it.value) : ""),
+      el("td", { class: "num" }, String(it.finalValue))));
+  const pieceSum = result.pieces.reduce((s, p) => s + p.value, 0);
+  const pieceRow = el("tr", {},
+    el("td", {}, el("span", { class: "chip", style: "background:repeating-linear-gradient(-45deg,#ece4d4 0 3px,#cbbfa8 3px 6px)" }), `特殊矩形 ×${result.pieces.length}`),
+    el("td", {}, "1×2"), el("td", { class: "num" }, ""), el("td", { class: "num" }, ""),
+    el("td", { class: "num" }, String(pieceSum)));
+  $("#breakdown").replaceChildren(el("table", {},
+    el("thead", {}, el("tr", {}, ...["物品", "形状", "基础", "加成", "最终"].map((h, i) => el("th", { class: i >= 2 ? "num" : "" }, h)))),
+    el("tbody", {}, ...itemRows, pieceRow)));
+}
+
+function render() {
+  $("#w").value = state.width;
+  $("#h").value = state.height;
+  renderBoard();
+  renderRows();
+  renderResult();
+}
+
+/* ---------- solve / io ---------- */
+function buildRequest() {
+  const items = [], rows = [];
+  state.items.forEach((it, r) => {
+    const base = it.name.trim() || `${it.type}${r + 1}`;
+    for (let k = 0; k < it.qty; k++) {
+      const item = { name: it.qty > 1 ? `${base}#${k + 1}` : base, value: it.value, type: it.type, adjBonus: it.adj };
+      if (it.border) item.border = it.border;
+      items.push(item);
+      rows.push(r);
+    }
+  });
+  return { request: { width: state.width, height: state.height, blocked: state.blocked, items }, rows };
+}
+
+function setStatus(text, kind = "") {
+  const s = $("#status");
+  s.textContent = text;
+  s.className = "status" + (kind ? " " + kind : "");
+}
+
+function solve() {
+  if (worker) return cancelSolve();
+  const { request, rows } = buildRequest();
+  if (request.items.length === 0) return setStatus("请先添加物品", "err");
+  if (request.items.length > MAX_ITEMS) return setStatus(`物品最多 ${MAX_ITEMS} 件`, "err");
+  const btn = $("#solveBtn");
+  btn.textContent = "取消";
+  btn.classList.add("cancel");
+  const t0 = performance.now();
+  let progress = "";
+  const tick = () => setStatus(`求解中… ${((performance.now() - t0) / 1000).toFixed(0)}s ${progress}`);
+  const timer = setInterval(tick, 250);
+  tick();
+  const finish = (text, kind) => {
+    clearInterval(timer);
+    worker?.terminate(); // also ends the solver's thread pool
+    worker = null;
+    btn.textContent = "求最优解";
+    btn.classList.remove("cancel");
+    setStatus(text, kind);
+  };
+  cancelSolve = () => finish("已取消", "");
+  worker = new Worker(new URL("./solver.worker.js", import.meta.url), { type: "module" });
+  worker.onmessage = ({ data }) => {
+    if (data.type === "progress") {
+      progress = `· 第 ${data.round} 轮 ${Math.round((100 * (data.pos + 1)) / data.cells)}%`;
+    } else if (data.type === "done") {
+      result = data.result;
+      resultRows = rows;
+      finish("完成", "ok");
+      render();
+    } else {
+      finish("出错：" + data.message, "err");
+    }
+  };
+  worker.onerror = (e) => finish("出错：" + (e.message || "求解线程崩溃（可能是内存不足）"), "err");
+  // optional ?threads=N caps the CPU cores used (default: all)
+  const threads = Number(new URLSearchParams(location.search).get("threads")) || undefined;
+  worker.postMessage({ problem: request, threads });
+}
+let cancelSolve = () => {};
+
+function exportJson() {
+  const blob = new Blob([JSON.stringify(buildRequest().request, null, 2)], { type: "application/json" });
+  const a = el("a", { href: URL.createObjectURL(blob), download: "knapsack.json" });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importJson(text) {
+  const p = JSON.parse(text);
+  if (!Number.isInteger(p.width) || !Number.isInteger(p.height) || !Array.isArray(p.items)) throw new Error("缺少 width/height/items");
+  const items = p.items.map((it) => {
+    const type = it.type || Object.keys(SHAPES).find((t) => JSON.stringify(SHAPES[t]) === JSON.stringify(it.shape));
+    if (!SHAPES[type]) throw new Error(`物品 ${it.name} 的形状不是内置的 6 种之一`);
+    return { type, name: it.name || "", value: toInt(it.value), border: it.border || "", adj: !!it.adjBonus, qty: 1 };
+  });
+  state = { width: p.width, height: p.height, blocked: p.blocked || [], items };
+  invalidate();
+}
+
+function setDim(key, input) {
+  const v = Math.min(MAX_SIDE, Math.max(1, toInt(input.value) || 1));
+  const cornersOnly = sameCells(state.blocked, corners(state.width, state.height));
+  state[key] = v;
+  state.blocked = cornersOnly ? corners(state.width, state.height)   // untouched default follows the resize
+    : state.blocked.filter(([x, y]) => x < state.width && y < state.height);
+  invalidate();
+}
+
+async function init() {
+  renderPalette();
+  $("#w").addEventListener("change", (e) => setDim("width", e.target));
+  $("#h").addEventListener("change", (e) => setDim("height", e.target));
+  $("#solveBtn").addEventListener("click", solve);
+  $("#exportBtn").addEventListener("click", exportJson);
+  $("#importBtn").addEventListener("click", () => $("#importFile").click());
+  $("#importFile").addEventListener("change", async (e) => {
+    const f = e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    try { importJson(await f.text()); setStatus("已导入", "ok"); }
+    catch (err) { setStatus("导入失败：" + err.message, "err"); }
+  });
+  render();
+}
+init().catch((e) => setStatus("初始化失败：" + e.message, "err"));
+</script>
+</body>
+</html>
