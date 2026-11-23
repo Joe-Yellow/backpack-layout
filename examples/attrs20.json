@@ -1,0 +1,168 @@
+{
+ "width": 7,
+ "height": 5,
+ "blocked": [],
+ "items": [
+  {
+   "name": "凹形0",
+   "adjBonus": true,
+   "type": "U",
+   "performance": 50,
+   "quality": 28,
+   "efficiency": 27,
+   "required": true
+  },
+  {
+   "name": "L形1",
+   "type": "L",
+   "performance": 25,
+   "quality": 35,
+   "efficiency": 27
+  },
+  {
+   "name": "T形2",
+   "adjBonus": true,
+   "type": "T",
+   "performance": 44,
+   "quality": 29,
+   "efficiency": 14
+  },
+  {
+   "name": "方形3",
+   "type": "O",
+   "performance": 44,
+   "quality": 32,
+   "efficiency": 27
+  },
+  {
+   "name": "T形4",
+   "adjBonus": true,
+   "type": "T",
+   "performance": 8,
+   "quality": 37,
+   "efficiency": 6
+  },
+  {
+   "name": "小L5",
+   "border": "top",
+   "adjBonus": true,
+   "type": "V",
+   "performance": 17,
+   "quality": 11,
+   "efficiency": 25
+  },
+  {
+   "name": "L形6",
+   "adjBonus": true,
+   "type": "L",
+   "performance": 16,
+   "quality": 32,
+   "efficiency": 15
+  },
+  {
+   "name": "小L7",
+   "type": "V",
+   "performance": 6,
+   "quality": 40,
+   "efficiency": 19
+  },
+  {
+   "name": "小L8",
+   "type": "V",
+   "performance": 31,
+   "quality": 11,
+   "efficiency": 3
+  },
+  {
+   "name": "方形9",
+   "adjBonus": true,
+   "type": "O",
+   "performance": 48,
+   "quality": 28,
+   "efficiency": 9
+  },
+  {
+   "name": "方形10",
+   "type": "O",
+   "performance": 24,
+   "quality": 9,
+   "efficiency": 2
+  },
+  {
+   "name": "T形11",
+   "border": "right",
+   "type": "T",
+   "performance": 17,
+   "quality": 34,
+   "efficiency": 25
+  },
+  {
+   "name": "T形12",
+   "border": "right",
+   "adjBonus": true,
+   "type": "T",
+   "performance": 22,
+   "quality": 40,
+   "efficiency": 1
+  },
+  {
+   "name": "小L13",
+   "adjBonus": true,
+   "type": "V",
+   "performance": 20,
+   "quality": 38,
+   "efficiency": 12
+  },
+  {
+   "name": "方形14",
+   "type": "O",
+   "performance": 45,
+   "quality": 28,
+   "efficiency": 20
+  },
+  {
+   "name": "小L5_dup0",
+   "border": "top",
+   "adjBonus": true,
+   "type": "V",
+   "performance": 17,
+   "quality": 39,
+   "efficiency": 20
+  },
+  {
+   "name": "方形14_dup1",
+   "type": "O",
+   "performance": 45,
+   "quality": 10,
+   "efficiency": 19
+  },
+  {
+   "name": "方形3_dup2",
+   "type": "O",
+   "performance": 44,
+   "quality": 0,
+   "efficiency": 26
+  },
+  {
+   "name": "T形4_dup3",
+   "adjBonus": true,
+   "type": "T",
+   "performance": 8,
+   "quality": 33,
+   "efficiency": 2
+  },
+  {
+   "name": "方形9_dup4",
+   "adjBonus": true,
+   "type": "O",
+   "performance": 48,
+   "quality": 3,
+   "efficiency": 1
+  }
+ ],
+ "goal": {
+  "performance": "max",
+  "quality": 100,
+  "efficiency": "skip"
+ }
+}

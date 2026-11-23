@@ -6,19 +6,23 @@
 //! therefore optimal. Otherwise the over-used classes become tracked and the round repeats. Tracking
 //! every item gives the original problem, so this terminates with a proven optimum.
 //!
-//! Within one layer, partial layouts with the same Sweep key form a Pareto front, kept sorted by acc
-//! descending. A dominates B if A used a subset of B's tracked items, each open item of A is worth at
-//! least as much as B's and has the bonus flag whenever B's has it, and acc(A) - acc(B) is at least
-//! the number of entities where A's remainder is smaller: every completion of B is open to A, future
-//! rewards are monotone in those values, and a smaller remainder costs at most 1 point per entity
-//! (an entity's whole future reward is floor((rem + added) / q)).
+//! Required items are tracked from the start; targets and required items are checked on complete
+//! layouts. A relaxation with no layout meeting them proves the original has none either.
+//!
+//! Within one layer, partial layouts with the same Sweep key form a Pareto front, kept sorted by the
+//! maximized slot descending. A dominates B if, in every slot, A is ahead by at least the most B's
+//! open entities can still gain over A's (Sweep::penalty), A used a subset of B's tracked items
+//! (every completion of B stays open to A) and exactly the same required items (B's completions
+//! don't place the ones B already placed). Target slots whose values are never negative are capped
+//! at the target: beyond it nothing changes.
 //!
 //! Parallelism: fronts live in SHARDS shards chosen by key hash. A layer is expanded in parallel
 //! batches; children are bucketed by shard and each shard inserts its bucket on one thread, so no
 //! locks are needed. Steps always move pos forward, so children never land in the layer being read.
 
-use crate::problem::Problem;
-use crate::sweep::{ent_rem, is_piece, item_adj, item_value, Ents, Key, Sweep, DOMINO};
+use crate::problem::{Goal, Problem};
+use crate::sweep::{Ents, Key, Score, Sweep, DOMINO, SLOTS};
+use crate::verifier;
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHasher};
 use smallvec::SmallVec;
@@ -44,11 +48,18 @@ pub struct Layout {
 pub struct Solution {
     /// [gather, expand, insert] seconds summed over rounds (diagnostics)
     pub phases: [f64; 3],
+    /// Total of the maximized attribute (or empty cells).
     pub value: i64,
     pub layout: Layout,
     pub rounds: u32,
     pub tracked_items: u32,
     pub nodes: u64,
+}
+
+pub enum Outcome {
+    Solved(Solution),
+    /// No layout places every required item and meets every target (proven).
+    Infeasible,
 }
 
 /// Search-tree node kept to rebuild the layout: parent id and the step taken at pos.
@@ -66,7 +77,7 @@ type Front = SmallVec<[Entry; 1]>;
 /// Partial layout waiting in a Pareto front.
 struct Entry {
     id: u32,
-    acc: i32,
+    acc: Score,
     used: u64,
     ents: Ents,
 }
@@ -93,32 +104,104 @@ struct Shard {
     inserted: u64,
 }
 
+/// Per-solve settings shared by every round.
+struct Ctx<'a> {
+    sweep: &'a Sweep,
+    /// Target of each slot (slot 0 is maximized: no target).
+    targets: [Option<i32>; SLOTS],
+    /// Slot cap: the target, where no value is negative so the total can only grow.
+    caps: [i32; SLOTS],
+}
+
 /// Solves exactly. Fails only when the browser memory budget is exceeded.
+///
+/// Targets first get a cheap pass without them: if that optimum happens to meet every target it is
+/// optimal for the constrained problem too (dropping constraints can only raise the optimum).
+/// Comparing two scores per state is much slower, so this pays off whenever targets are loose.
 pub fn solve(
     p: &Problem,
     on_progress: &mut dyn FnMut(u32, usize, usize),
-) -> Result<Solution, String> {
-    let sweep = Sweep::new(p);
-    let mut tracked = 0u64;
+) -> Result<Outcome, String> {
+    let mut rounds_before = 0;
+    let mut nodes_before = 0;
+    if !p.goal.targets.is_empty() {
+        let relaxed = Problem {
+            goal: Goal {
+                maximize: p.goal.maximize,
+                targets: Vec::new(),
+            },
+            ..p.clone()
+        };
+        match solve_exact(&relaxed, 0, on_progress)? {
+            // only the required items can make the untargeted problem infeasible
+            Outcome::Infeasible => return Ok(Outcome::Infeasible),
+            Outcome::Solved(sol) => {
+                let score = verifier::evaluate(p, &sol.layout)?;
+                if score.feasible(p, &sol.layout) {
+                    return Ok(Outcome::Solved(sol));
+                }
+                rounds_before = sol.rounds;
+                nodes_before = sol.nodes;
+            }
+        }
+    }
+    Ok(match solve_exact(p, rounds_before, on_progress)? {
+        Outcome::Solved(mut sol) => {
+            sol.rounds += rounds_before;
+            sol.nodes += nodes_before;
+            Outcome::Solved(sol)
+        }
+        Outcome::Infeasible => Outcome::Infeasible,
+    })
+}
+
+/// Rounds are numbered from `round_base + 1` in progress reports.
+fn solve_exact(
+    p: &Problem,
+    round_base: u32,
+    on_progress: &mut dyn FnMut(u32, usize, usize),
+) -> Result<Outcome, String> {
+    let mut slots = vec![p.goal.maximize];
+    slots.extend(p.goal.targets.iter().map(|&(a, _)| Some(a)));
+    let sweep = Sweep::new(p, &slots);
+    let mut targets = [None; SLOTS];
+    let mut caps = [i32::MAX; SLOTS];
+    for (j, &(attr, t)) in p.goal.targets.iter().enumerate() {
+        let t = t.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+        targets[j + 1] = Some(t);
+        if p.items.iter().all(|it| it.attrs[attr] >= 0) {
+            caps[j + 1] = t.max(0);
+        }
+    }
+    let ctx = Ctx {
+        sweep: &sweep,
+        targets,
+        caps,
+    };
+    let mut tracked = sweep.required;
     let mut total_nodes = 0;
     let mut phases = [0.0; 3];
     for round in 1.. {
-        let (acc, path, nodes, ph) =
-            run_round(&sweep, tracked, &mut |pos| on_progress(round, pos, sweep.n))?;
+        let Some((acc, path, nodes, ph)) = run_round(&ctx, tracked, &mut |pos| {
+            on_progress(round_base + round, pos, sweep.n)
+        })?
+        else {
+            return Ok(Outcome::Infeasible);
+        };
         total_nodes += nodes;
         for k in 0..3 {
             phases[k] += ph[k];
         }
         let over = over_used(&sweep, &path);
         if over == 0 {
-            return Ok(Solution {
+            return Ok(Outcome::Solved(Solution {
                 phases,
                 value: acc as i64,
                 layout: to_layout(&sweep, &path, p.items.len()),
                 rounds: round,
                 tracked_items: tracked.count_ones(),
                 nodes: total_nodes,
-            });
+            }));
         }
         // Track the over-used classes and everything else this path used: those are the items the
         // next relaxations would otherwise over-use one at a time (fewer, slightly larger rounds).
@@ -136,14 +219,16 @@ fn shard_of(key: &[u8]) -> usize {
     (h.finish().wrapping_mul(0x9E37_79B9_7F4A_7C15) >> (64 - SHARD_BITS)) as usize
 }
 
-/// Result of one round: best acc, best path as (pos, code) steps, inserted nodes, phase seconds.
-type RoundResult = (i32, Vec<(usize, u32)>, u64, [f64; 3]);
+/// Result of one round: best maximized total, best path as (pos, code) steps, inserted nodes,
+/// phase seconds. None: no complete layout meets the targets and required items.
+type RoundResult = Option<(i32, Vec<(usize, u32)>, u64, [f64; 3])>;
 
 fn run_round(
-    sweep: &Sweep,
+    ctx: &Ctx,
     tracked: u64,
     on_layer: &mut dyn FnMut(usize),
 ) -> Result<RoundResult, String> {
+    let sweep = ctx.sweep;
     let mut ph = [0.0; 3];
     let mut shards: Vec<Shard> = (0..SHARDS)
         .map(|_| Shard {
@@ -153,12 +238,13 @@ fn run_round(
         .collect();
     let root = Sweep::pos_of(&sweep.root_key);
     shards[shard_of(&sweep.root_key)].insert(
+        ctx,
         &ChildRec {
             layer: root,
             key: sweep.root_key.clone(),
             entry: Entry {
                 id: 0,
-                acc: 0,
+                acc: [0; SLOTS],
                 used: 0,
                 ents: Ents::new(),
             },
@@ -183,13 +269,13 @@ fn run_round(
         ph[0] += now() - t0;
         for batch in fronts.chunks(FRONTS_PER_BATCH) {
             let t1 = now();
-            let children = expand_batch(sweep, tracked, pos, batch);
+            let children = expand_batch(ctx, tracked, pos, batch);
             let t2 = now();
             ph[1] += t2 - t1;
             shards.par_iter_mut().enumerate().for_each(|(s, sh)| {
                 for out in &children {
                     for &i in &out.by_shard[s] {
-                        sh.insert(&out.children[i as usize], false);
+                        sh.insert(ctx, &out.children[i as usize], false);
                     }
                 }
             });
@@ -202,20 +288,23 @@ fn run_round(
         on_layer(pos);
     }
 
+    let meets = |e: &Entry| {
+        e.used & sweep.required == sweep.required
+            && (0..SLOTS).all(|j| ctx.targets[j].is_none_or(|t| e.acc[j] >= t))
+    };
     let finals: Vec<(&Entry, usize)> = shards
         .iter()
         .enumerate()
         .flat_map(|(s, sh)| sh.layers[sweep.n].values().flatten().map(move |e| (e, s)))
+        .filter(|(e, _)| meets(e))
         .collect();
-    let best = finals
-        .iter()
-        .map(|(e, _)| e.acc)
-        .max()
-        .expect("no complete layout");
+    let Some(best) = finals.iter().map(|(e, _)| e.acc[0]).max() else {
+        return Ok(None);
+    };
     let nodes = shards.iter().map(|s| s.inserted).sum();
     // Among tied best layouts prefer one that over-uses nothing: saves a needless extra round.
     let mut pick = None;
-    for (e, s) in finals.iter().filter(|(e, _)| e.acc == best) {
+    for (e, s) in finals.iter().filter(|(e, _)| e.acc[0] == best) {
         let path = path_of(&shards, (*s as u32) << (32 - SHARD_BITS) | e.id);
         let feasible = over_used(sweep, &path) == 0;
         if pick.is_none() || feasible {
@@ -225,17 +314,18 @@ fn run_round(
             break;
         }
     }
-    Ok((best, pick.unwrap(), nodes, ph))
+    Ok(Some((best, pick.unwrap(), nodes, ph)))
 }
 
 /// Expands a batch of fronts in parallel, in a few contiguous chunks per thread. Children are
 /// indexed by destination shard as they are produced, so no sequential pass is needed.
 fn expand_batch(
-    sweep: &Sweep,
+    ctx: &Ctx,
     tracked: u64,
     pos: usize,
     batch: &[(Key, Front, u32)],
 ) -> Vec<WorkerOut> {
+    let sweep = ctx.sweep;
     let chunks = (rayon::current_num_threads() * 4).max(1);
     let chunk_len = batch.len().div_ceil(chunks).max(1);
     batch
@@ -258,7 +348,9 @@ fn expand_batch(
                                 layer: Sweep::pos_of(&c.key),
                                 entry: Entry {
                                     id: 0,
-                                    acc: e.acc + c.gain,
+                                    acc: std::array::from_fn(|j| {
+                                        (e.acc[j] + c.gain[j]).min(ctx.caps[j])
+                                    }),
                                     used: c.used,
                                     ents: c.ents,
                                 },
@@ -289,10 +381,10 @@ fn push<T>(v: &mut Vec<T>, x: T) {
 }
 
 impl Shard {
-    /// Adds a node unless dominated; removes nodes it dominates. Fronts are sorted by acc descending:
-    /// a dominator never has lower acc, so only the part with acc >= the node's can dominate it, and
-    /// only the part with acc <= the node's can be dominated by it.
-    fn insert(&mut self, rec: &ChildRec, root: bool) {
+    /// Adds a node unless dominated; removes nodes it dominates. Fronts are sorted by the maximized
+    /// slot descending: a dominator never scores lower there, so only the part with acc[0] >= the
+    /// node's can dominate it, and only the part with acc[0] <= the node's can be dominated by it.
+    fn insert(&mut self, ctx: &Ctx, rec: &ChildRec, root: bool) {
         let layer = &mut self.layers[rec.layer];
         if !layer.contains_key(&rec.key) {
             layer.insert(rec.key.clone(), Front::new());
@@ -305,20 +397,20 @@ impl Shard {
             ents: rec.entry.ents.clone(),
         };
         let mut at = 0;
-        while at < front.len() && front[at].acc >= e.acc {
-            if dominates(&front[at], &e) {
+        while at < front.len() && front[at].acc[0] >= e.acc[0] {
+            if dominates(ctx, &front[at], &e) {
                 return;
             }
             at += 1;
         }
         let mut lo = at;
-        while lo > 0 && front[lo - 1].acc == e.acc {
+        while lo > 0 && front[lo - 1].acc[0] == e.acc[0] {
             lo -= 1; // equal acc may also be dominated by the new node
         }
         let mut i = front.len();
         while i > lo {
             i -= 1;
-            if dominates(&e, &front[i]) {
+            if dominates(ctx, &e, &front[i]) {
                 front.remove(i);
                 if i < at {
                     at -= 1;
@@ -340,30 +432,35 @@ impl Shard {
     }
 }
 
-fn dominates(a: &Entry, b: &Entry) -> bool {
-    if a.used & !b.used != 0 {
+/// A dominates B: every completion of B, applied to A, scores at least as much in the maximized
+/// slot and meets every target B meets.
+fn dominates(ctx: &Ctx, a: &Entry, b: &Entry) -> bool {
+    let sweep = ctx.sweep;
+    if a.used & !b.used != 0 || (a.used ^ b.used) & sweep.required != 0 {
         return false;
     }
-    let mut slack = a.acc - b.acc;
-    for (&x, &y) in a.ents.iter().zip(&b.ents) {
-        if slack < 0 {
-            return false;
-        }
-        if is_piece(x) {
-            if ent_rem(x) < ent_rem(y) {
-                slack -= 1;
-            }
+    // per slot: what A is ahead now, minus what B's open entities may still gain over A's
+    let mut slack: [i64; SLOTS] = std::array::from_fn(|j| a.acc[j] as i64 - b.acc[j] as i64);
+    // a capped slot already meets its target and can only grow: nothing to compare there
+    let settled: [bool; SLOTS] = std::array::from_fn(|j| a.acc[j] >= ctx.caps[j]);
+    if (0..SLOTS).any(|j| !settled[j] && slack[j] < 0) {
+        return false;
+    }
+    for (x, y) in a.ents.iter().zip(&b.ents) {
+        if x == y {
             continue;
         }
-        let y_adj = item_adj(y);
-        if item_value(x) < item_value(y) || (y_adj && !item_adj(x)) {
+        let Some(pen) = sweep.penalty(x, y) else {
             return false;
-        }
-        if y_adj && ent_rem(x) < ent_rem(y) {
-            slack -= 1;
+        };
+        for j in 0..SLOTS {
+            slack[j] -= pen[j] as i64;
+            if !settled[j] && slack[j] < 0 {
+                return false;
+            }
         }
     }
-    slack >= 0
+    true
 }
 
 fn path_of(shards: &[Shard], mut id: u32) -> Vec<(usize, u32)> {

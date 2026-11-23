@@ -34,18 +34,25 @@ fn run(f: &str) -> Result<(), String> {
             last_round = round;
         }
     };
-    let sol = exact::solve(&p, &mut progress)?;
+    let sol = match exact::solve(&p, &mut progress)? {
+        exact::Outcome::Solved(sol) => sol,
+        exact::Outcome::Infeasible => {
+            println!("{f}: infeasible time={:.1}s", t0.elapsed().as_secs_f64());
+            return Ok(());
+        }
+    };
     let secs = t0.elapsed().as_secs_f64();
     let score = verifier::evaluate(&p, &sol.layout)?;
-    if score.total != sol.value {
+    if !score.feasible(&p, &sol.layout) || score.objective(&p) != sol.value {
         return Err(format!(
-            "solver value {} != verifier score {}",
-            sol.value, score.total
+            "solver value {} != verifier score {} (or targets unmet)",
+            sol.value,
+            score.objective(&p)
         ));
     }
     println!(
-        "{f}: optimum={} rounds={} nodes={} phases={:.1?} time={secs:.1}s",
-        sol.value, sol.rounds, sol.nodes, sol.phases
+        "{f}: optimum={} totals={:?} rounds={} nodes={} phases={:.1?} time={secs:.1}s",
+        sol.value, score.totals, sol.rounds, sol.nodes, sol.phases
     );
     Ok(())
 }

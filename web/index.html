@@ -63,7 +63,7 @@
   .btn.primary:disabled { background: var(--ink-soft); border-color: var(--ink-soft); box-shadow: none; cursor: progress; transform: none; }
 
   .desk {
-    display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 28px;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 28px;
     max-width: 1320px; margin: 0 auto; padding: 28px 32px 60px; align-items: start;
   }
   @media (max-width: 1000px) {
@@ -106,6 +106,9 @@
   }
   .cell .tag small { display: block; font: 500 clamp(8px, calc(var(--cell) * .17), 10px)/1.2 var(--font-sans); opacity: .9; }
   .cell.piece .tag { color: var(--ink); text-shadow: none; }
+  .cell .tag.info { font-weight: 600; font-size: clamp(8px, calc(var(--cell) * .18), 11px); line-height: 1.2; }
+  .cell .tag.info i { font-style: normal; opacity: .8; margin-right: 2px; }
+  .breakdown .bonus small { display: block; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
   .solve-bar { display: flex; align-items: center; gap: 16px; margin-top: 20px; flex-wrap: wrap; }
   .status { font: 13px var(--font-mono); color: var(--ink-soft); }
   .status.ok { color: var(--ok); font-weight: 700; }
@@ -129,8 +132,47 @@
   .items-card { padding: 22px 0 10px; }
   .items-card > header { padding: 0 26px 6px; display: flex; align-items: baseline; justify-content: space-between; }
   .count { font: 12px var(--font-mono); color: var(--ink-soft); }
+  .head-tools { display: flex; align-items: baseline; gap: 12px; }
+  .btn.clear { padding: 3px 10px; font-size: 12px; }
+  .btn.clear:disabled { opacity: .4; cursor: default; }
+  .item-list > summary { padding: 12px 26px; cursor: pointer; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); list-style: none; }
+  .item-list > summary::-webkit-details-marker { display: none; }
+  .item-list > summary::before { content: "▾"; display: inline-block; margin-right: 6px; transition: transform .15s; }
+  .item-list:not([open]) > summary::before { transform: rotate(-90deg); }
+  .item-list > summary:hover { color: var(--ink); }
   .palette-label { margin: 10px 26px 0; font-size: 13px; color: var(--accent); font-weight: 600; }
-  .palette { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; padding: 8px 26px 20px; border-bottom: 1.5px solid var(--ink); }
+  .palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px; padding: 8px 26px 14px; }
+  .palette .custom { position: relative; display: grid; }
+  .palette .custom .x { position: absolute; top: 2px; right: 2px; border: 0; background: none; color: var(--ink-soft); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
+  .palette .custom .x:hover { color: var(--accent); background: #f4e1dc; }
+  .shape-btn.add b { font-size: 22px; line-height: 44px; }
+  .shape-editor { border: 1.5px solid var(--ink); border-radius: 12px; padding: 20px 22px; background: var(--paper, #fff); }
+  .shape-editor::backdrop { background: rgba(0, 0, 0, .35); }
+  .shape-editor h3 { margin: 0 0 4px; }
+  .shape-editor p { margin: 0 0 12px; font-size: 13px; color: var(--ink-soft); }
+  .draw-grid { display: grid; grid-template-columns: repeat(3, 48px); gap: 4px; justify-content: center; margin-bottom: 12px; }
+  .draw-grid button { width: 48px; height: 48px; border: 1.5px solid var(--rule); border-radius: 6px; background: #fff; cursor: pointer; }
+  .draw-grid button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); }
+  .shape-editor .err { color: var(--accent); min-height: 1.2em; }
+  .shape-editor menu { display: flex; justify-content: flex-end; gap: 8px; margin: 0; padding: 0; }
+  .presets { padding: 0 26px 16px; border-bottom: 1.5px solid var(--ink); }
+  .presets h3 { margin: 0 0 8px; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); }
+  .preset-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .preset-list .empty-note { margin: 0; font-size: 12px; color: var(--ink-soft); }
+  .group-save { display: flex; gap: 8px; margin-bottom: 10px; }
+  .group-save input { flex: 1; width: 0; min-width: 0; padding: 6px 8px; border: 1.5px solid var(--rule); border-radius: var(--radius-s); background: #fff; }
+  .group-save .btn { padding: 6px 12px; white-space: nowrap; }
+  .preset { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 26px 6px 8px; cursor: pointer;
+    background: #fff; border: 1.5px solid var(--rule); border-radius: 8px; text-align: left;
+    transition: border-color .15s, transform .15s var(--ease); }
+  .preset:hover { border-color: var(--ink); transform: translateY(-1px); }
+  .preset .icons { display: flex; gap: 2px; flex: none; }
+  .preset .icons svg { width: 18px; height: 13px; }
+  .preset b { display: block; font-size: 13px; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .preset small { display: block; font: 11px var(--font-mono); color: var(--ink-soft); }
+  .preset .x { position: absolute; top: 2px; right: 4px; border: 0; background: none; color: var(--ink-soft); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
+  .preset .x:hover { color: var(--accent); background: #f4e1dc; }
+
   .shape-btn {
     display: grid; justify-items: center; gap: 6px; padding: 12px 4px 8px; cursor: pointer;
     background: #fff; border: 1.5px solid var(--rule); border-radius: 10px;
@@ -139,13 +181,15 @@
   .shape-btn:hover { transform: translateY(-3px); border-color: var(--ink); box-shadow: 0 8px 16px -10px rgba(0, 0, 0, .5); }
   .shape-btn:active { transform: translateY(0); }
   .shape-btn b { font: 700 15px var(--font-mono); }
-  .shape-btn svg { height: 44px; width: auto; }
+  .shape-btn svg { height: 44px; width: 100%; } /* viewBox keeps the aspect: long shapes shrink to fit */
 
   .items { font-size: 14px; }
   .items th { text-align: left; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); padding: 10px 6px; }
   .items th:first-child, .items td:first-child { padding-left: 26px; }
-  .items th:last-child, .items td:last-child { padding-right: 20px; }
-  .items td { padding: 6px; border-top: 1px solid var(--rule); vertical-align: middle; }
+  .items th:last-child, .items td:last-child { padding-right: 14px; }
+  .items td { padding: 6px 4px; border-top: 1px solid var(--rule); vertical-align: middle; }
+  .items td.attr input { min-width: 58px; padding: 5px 4px; text-align: right; -moz-appearance: textfield; appearance: textfield; } /* fits -999 */
+  .items td.attr input::-webkit-inner-spin-button, .items td.attr input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; } /* spinners ate ~15px */
   .items tbody tr { transition: background .15s; }
   .items tbody tr:hover { background: #fff; }
   .items input[type=text], .items input[type=number], .items select {
@@ -164,6 +208,32 @@
   .empty { padding: 26px; margin: 0; color: var(--ink-soft); text-align: center; }
   .empty[hidden] { display: none; }
 
+  /* goal: one row per attribute with a 3-way switch */
+  .goal { display: grid; gap: 8px; margin-top: 18px; }
+  .goal-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .goal-row > b { width: 34px; font-size: 14px; }
+  .seg { display: inline-flex; border: 1.5px solid var(--ink); border-radius: var(--radius-s); overflow: hidden; }
+  .seg button { border: 0; border-left: 1.5px solid var(--ink); background: var(--card); padding: 5px 12px; cursor: pointer; font-size: 13px; }
+  .seg button:first-child { border-left: 0; }
+  .seg button[aria-pressed=true] { background: var(--ink); color: var(--accent-ink); font-weight: 700; }
+  .seg button:disabled { color: var(--rule); cursor: not-allowed; }
+  .goal-row input { width: 86px; padding: 4px 6px; border: 1.5px solid var(--rule); border-radius: var(--radius-s); font-family: var(--font-mono); }
+  .goal-row .hint { font-size: 12px; }
+  .goal-note { margin: 2px 0 0; font-size: 12px; color: var(--ink-soft); }
+
+  .totals { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+  .totals .main .num { font: 700 56px/1 var(--font-display); }
+  .totals .sub .num { font: 700 26px/1 var(--font-display); }
+  .totals .lbl { font-size: 13px; color: var(--ink-soft); margin-left: 4px; }
+  .totals .met { font: 600 12px var(--font-mono); color: var(--ok); margin-left: 4px; }
+  .totals .skip { opacity: .4; }
+  .total .proof { margin-left: auto; }
+  .infeasible { border: 1.5px solid var(--accent); border-radius: var(--radius-s); padding: 12px 14px; color: var(--accent); font-size: 14px; width: 100%; }
+  .infeasible ul { margin: 6px 0 0; padding-left: 20px; color: var(--ink); }
+  .items th.attr { width: 64px; text-align: right; padding-right: 8px; }
+  .breakdown td.skip { opacity: .4; }
+  .breakdown .base { color: var(--ink-soft); font-size: 11px; margin-left: 3px; }
+
   .colophon { max-width: 1320px; margin: 0 auto; padding: 0 32px 40px; font-size: 12px; color: var(--ink-soft); }
   @media (max-width: 700px) {
     .masthead { padding: 20px 16px 12px; align-items: flex-start; }
@@ -174,18 +244,20 @@
     .board-card { padding: 16px; }
     .board-head { gap: 10px; margin-bottom: 12px; }
     .total { flex-wrap: wrap; }
-    .total .num { font-size: 44px; }
+    .totals .main .num { font-size: 44px; }
     .total .proof { margin-left: 0; }
     .items-card > header { padding: 0 16px 6px; }
+    .item-list > summary { padding: 12px 16px; }
     .palette-label { margin: 8px 16px 0; }
-    .palette { gap: 6px; padding: 8px 16px 16px; }
+    .palette { gap: 6px; padding: 8px 16px 12px; }
+    .presets { padding: 0 16px 14px; }
     .shape-btn { padding: 8px 2px 6px; }
-    .shape-btn svg { height: 30px; }
+    .shape-btn svg { height: 30px; width: 100%; }
     .colophon { padding: 0 16px 32px; }
     /* 16px inputs: iOS zooms the page when focusing anything smaller */
     input, select { font-size: 16px; }
 
-    /* item table becomes one card per item: shape + name, then value / border / bonus / count */
+    /* item table becomes one card per item: shape + name / attributes + count / border, flags */
     .items thead { display: none; }
     .items, .items tbody { display: block; }
     .items tr {
@@ -200,6 +272,7 @@
     /* shape icon + select need ~100px: give them two of the four columns */
     .items td:nth-child(1) { grid-column: 1 / 3; }
     .items td:nth-child(2) { grid-column: 3 / 5; }
+    .items td:nth-child(9) { grid-column: 4; grid-row: 2; } /* count next to the attributes */
     .items td:last-child { position: absolute; top: 10px; right: 8px; }
     .items td:last-child::before { display: none; }
     .items td.check { text-align: left !important; }
@@ -234,27 +307,48 @@
       <span class="hint">点击格子切换禁用格</span>
     </div>
     <div class="board-wrap"><div id="board" class="board" role="grid" aria-label="棋盘"></div></div>
+    <div class="goal" id="goal" role="group" aria-label="求解目标"></div>
     <div class="solve-bar">
       <button class="btn primary" id="solveBtn" type="button">求最优解</button>
       <span class="status" id="status" role="status"></span>
     </div>
-    <div class="total" id="total" hidden>
-      <span class="num" id="totalNum"></span><span class="lbl">总价值</span>
-      <span class="proof" id="proof"></span>
-    </div>
+    <div class="total" id="total" hidden></div>
     <div class="breakdown" id="breakdown"></div>
   </section>
 
   <section class="card items-card" aria-labelledby="items-h">
-    <header><h2 id="items-h">物品</h2><span class="count" id="count"></span></header>
+    <header><h2 id="items-h">物品</h2><span class="head-tools"><span class="count" id="count"></span><button class="btn clear" id="clearBtn" type="button">清空物品</button></span></header>
     <p class="palette-label">点击形状添加物品 ↓</p>
     <div class="palette" id="palette" aria-label="添加物品"></div>
+    <section class="presets" aria-labelledby="presets-h">
+      <h3 id="presets-h">我的预设组</h3>
+      <form class="group-save" id="groupSave">
+        <input id="groupName" type="text" maxlength="40" placeholder="组名，如：主力配置" aria-label="预设组名称">
+        <button class="btn" type="submit">保存当前物品</button>
+      </form>
+      <div class="preset-list" id="presets"></div>
+    </section>
+    <details class="item-list" id="itemList" open>
+    <summary>物品列表</summary>
     <table class="items">
-      <thead><tr><th>形状</th><th>名称</th><th style="width:78px">价值</th><th style="width:96px">边界奖励</th><th style="width:52px">邻接</th><th style="width:66px">数量</th><th style="width:40px"></th></tr></thead>
+      <thead><tr><th>形状</th><th>名称</th><th class="attr">性能</th><th class="attr">质量</th><th class="attr">效率</th><th style="width:76px">边界</th><th style="width:40px">邻接</th><th style="width:40px">必选</th><th style="width:58px">数量</th><th style="width:34px"></th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
     <p class="empty" id="emptyHint">点击上方形状添加物品</p>
+    </details>
   </section>
+  <dialog class="shape-editor" id="shapeEditor" aria-labelledby="shape-editor-h">
+    <form method="dialog" id="shapeForm">
+      <h3 id="shape-editor-h">自定义形状</h3>
+      <p>点格子画出形状（最大 3×3，格子要连在一起）。旋转、翻转都会自动尝试。</p>
+      <div class="draw-grid" id="drawGrid"></div>
+      <p class="err" id="drawErr" role="alert"></p>
+      <menu>
+        <button class="btn" type="button" id="drawCancel">取消</button>
+        <button class="btn primary" type="submit">添加物品</button>
+      </menu>
+    </form>
+  </dialog>
 </main>
 <footer class="colophon">
   所有计算都在你的浏览器本地完成（WebAssembly 多线程），数据不会上传。物品越少、空间越挤，求解可能越久。
@@ -263,8 +357,11 @@
 <script type="module">
 const STORE = "knapsack-ui-v1";
 const MAX_SIDE = 12, MAX_ITEMS = 63;
-const COLORS = { U: "#2f6690", F: "#c8553d", L: "#4f7d4e", T: "#7b4b94", O: "#b8860b", V: "#2f8582" };
+const COLORS = { U: "#2f6690", F: "#c8553d", L: "#4f7d4e", T: "#7b4b94", O: "#b8860b", V: "#2f8582", I: "#a23b72" };
+const CUSTOM_COLORS = ["#5c6b73", "#8a6d3b", "#3d5a80", "#9c4f2e", "#4a7c59", "#6d4c7d"];
 const BORDERS = [["", "无"], ["top", "上"], ["bottom", "下"], ["left", "左"], ["right", "右"]];
+// attribute index -> [JSON name, label, item field]
+const ATTRS = [["performance", "性能", "perf"], ["quality", "质量", "qual"], ["efficiency", "效率", "eff"]];
 const $ = (s) => document.querySelector(s);
 
 // Built-in shapes; must match SHAPES in solver-rs/src/problem.rs.
@@ -275,18 +372,97 @@ const SHAPES = {
   T: [[0, 0], [1, 0], [2, 0], [1, 1]],
   O: [[0, 0], [1, 0], [0, 1], [1, 1]],
   V: [[0, 0], [1, 0], [0, 1]],
+  I: [[0, 0], [1, 0], [2, 0], [3, 0]],
 };
-let worker = null;        // solver worker while a solve is running
-let result = null;        // last solution from the server
+
+/* ---------- custom shapes: drawn on a 3x3 grid, named X1, X2, ... and kept in this browser ---------- */
+const SHAPE_STORE = "knapsack-shapes-v1";
+const DRAW_SIDE = 3;
+let customShapes = loadCustomShapes(); // [{ name, cells }]
+
+function loadCustomShapes() {
+  try {
+    const list = JSON.parse(localStorage.getItem(SHAPE_STORE));
+    if (Array.isArray(list)) return list.filter((c) => c && typeof c.name === "string" && Array.isArray(c.cells) && c.cells.length);
+  } catch (e) { /* fall through */ }
+  return [];
+}
+function saveCustomShapes() { localStorage.setItem(SHAPE_STORE, JSON.stringify(customShapes)); }
+/** Cells of an item: built-in by type, otherwise its own copy (so deleting a custom shape never breaks items). */
+const cellsOf = (it) => SHAPES[it.type] || it.cells || [];
+function colorOf(type) {
+  if (COLORS[type]) return COLORS[type];
+  const n = parseInt(String(type).slice(1), 10) || 0;
+  return CUSTOM_COLORS[n % CUSTOM_COLORS.length];
+}
+/** Moves cells to the origin, sorted by (y, x). */
+function normalize(cells) {
+  const mx = Math.min(...cells.map((c) => c[0])), my = Math.min(...cells.map((c) => c[1]));
+  return cells.map(([x, y]) => [x - mx, y - my]).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+}
+/** Identity under rotation and mirroring (same idea as shape_key in solver-rs/src/geometry.rs). */
+function shapeKey(cells) {
+  const keys = [];
+  for (let t = 0; t < 8; t++) {
+    const pts = cells.map(([x0, y0]) => {
+      let [x, y] = [x0, y0];
+      for (let k = 0; k < t % 4; k++) [x, y] = [-y, x];
+      return [t >= 4 ? -x : x, y];
+    });
+    keys.push(JSON.stringify(normalize(pts)));
+  }
+  return keys.sort()[0];
+}
+function connected(cells) {
+  const seen = new Set([0]), stack = [0];
+  while (stack.length) {
+    const [x, y] = cells[stack.pop()];
+    cells.forEach(([u, v], j) => {
+      if (!seen.has(j) && Math.abs(u - x) + Math.abs(v - y) === 1) { seen.add(j); stack.push(j); }
+    });
+  }
+  return seen.size === cells.length;
+}
+/** Type name for a shape: a built-in or existing custom one if it matches, else a new custom shape. */
+function typeForShape(cells) {
+  const key = shapeKey(cells);
+  const builtIn = Object.keys(SHAPES).find((t) => shapeKey(SHAPES[t]) === key);
+  if (builtIn) return builtIn;
+  const known = customShapes.find((c) => shapeKey(c.cells) === key);
+  if (known) return known.name;
+  const used = new Set(customShapes.map((c) => c.name));
+  let n = 1;
+  while (used.has(`X${n}`)) n++;
+  customShapes.push({ name: `X${n}`, cells: normalize(cells) });
+  saveCustomShapes();
+  return `X${n}`;
+}
+const customCells = (name) => customShapes.find((c) => c.name === name)?.cells;
+let engine = null;        // solver worker with its thread pool, kept warm between solves
+let solving = false;
+let result = null;        // last solution from the solver
 let resultRows = [];      // expanded item index -> row index, for the last solution
+let resultGoal = null;    // goal the last solution was computed for
 let state = loadState();
 
 function loadState() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE));
-    if (s && Array.isArray(s.items)) return s;
+    if (s && Array.isArray(s.items)) return upgrade(s);
   } catch (e) { /* fall through to default */ }
-  return { width: 7, height: 5, blocked: corners(7, 5), items: [] };
+  return upgrade({ width: 7, height: 5, blocked: corners(7, 5), items: [] });
+}
+/** Fills fields added after a state was saved: three attributes (old "value" = performance), goal. */
+function upgrade(s) {
+  for (const it of s.items) {
+    it.perf ??= it.value ?? 0;
+    it.qual ??= 0;
+    it.eff ??= 0;
+    it.required ??= false;
+    delete it.value;
+  }
+  s.goal ??= ["max", "skip", "skip"];
+  return s;
 }
 function corners(w, h) {
   const out = [];
@@ -310,8 +486,7 @@ function el(tag, attrs = {}, ...kids) {
   return e;
 }
 
-function shapeSvg(type, unit = 12) {
-  const cells = SHAPES[type] || [];
+function shapeSvg(type, unit = 12, cells = SHAPES[type] || customCells(type) || []) {
   const w = Math.max(...cells.map((c) => c[0])) + 1, h = Math.max(...cells.map((c) => c[1])) + 1;
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
@@ -319,7 +494,7 @@ function shapeSvg(type, unit = 12) {
   svg.setAttribute("aria-hidden", "true");
   for (const [x, y] of cells) {
     const r = document.createElementNS(ns, "rect");
-    Object.entries({ x: x * unit + 1, y: y * unit + 1, width: unit - 2, height: unit - 2, rx: 1.5, fill: COLORS[type] })
+    Object.entries({ x: x * unit + 1, y: y * unit + 1, width: unit - 2, height: unit - 2, rx: 1.5, fill: colorOf(type) })
       .forEach(([k, v]) => r.setAttribute(k, v));
     svg.append(r);
   }
@@ -329,11 +504,28 @@ function shapeSvg(type, unit = 12) {
 /* ---------- board ---------- */
 function rowColor(row) {
   const it = state.items[row];
-  const base = COLORS[it.type];
+  const base = colorOf(it.type);
   const sameBefore = state.items.slice(0, row).filter((o) => o.type === it.type).length;
   const mix = [0, 22, 40, 12, 30][sameBefore % 5];
   return `color-mix(in oklab, ${base}, white ${mix}%)`;
 }
+
+/** Where a placed item's bonus comes from: border touched, number of distinct adjacent pieces. */
+function bonusOf(it) {
+  const row = state.items[resultRows[it.index]];
+  const [w, h] = [state.width, state.height];
+  const onEdge = ([x, y]) => ({ top: y === 0, bottom: y === h - 1, left: x === 0, right: x === w - 1 })[row.border];
+  const border = !!row.border && it.cells.some(onEdge);
+  let adj = 0;
+  if (row.adj) {
+    const mine = new Set(it.cells.map(([x, y]) => `${x},${y}`));
+    adj = result.pieces.filter((pc) => pc.cells.some(([x, y]) =>
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => mine.has(`${x + dx},${y + dy}`)))).length;
+  }
+  const parts = [border ? "边" : null, adj ? `邻${adj}` : null].filter(Boolean);
+  return { border: border ? row.border : null, onEdge, pct: (border ? 20 : 0) + 10 * adj, text: parts.join("·") };
+}
+const ATTR_SHORT = ["性", "质", "效"];
 
 function renderBoard() {
   const board = $("#board");
@@ -342,17 +534,29 @@ function renderBoard() {
   const blocked = new Set(state.blocked.map(([x, y]) => `${x},${y}`));
   const owner = new Map();
   const tags = new Map();
+  const infos = new Map(); // cell -> lines [label, value] (base attributes, bonus)
+  const edges = new Map(); // cell -> side that earns the border bonus
   if (result) {
     result.items.forEach((it) => {
       const id = "i" + it.index;
       it.cells.forEach(([x, y]) => owner.set(`${x},${y}`, { id, color: rowColor(resultRows[it.index]) }));
-      const [fx, fy] = firstCell(it.cells);
-      tags.set(`${fx},${fy}`, [String(it.finalValue), it.name]);
+      const sorted = [...it.cells].sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+      const m = maxAttr(resultGoal);
+      tags.set(sorted[0].join(","), m < 0 ? [it.name, null] : [String(it.values[m]), it.name]);
+      // ponytail: 3+ cells per item assumed for the extra tags; a 1-2 cell custom shape just shows fewer
+      const b = bonusOf(it);
+      if (sorted[1]) infos.set(sorted[1].join(","), it.base.map((v, a) => [ATTR_SHORT[a], String(v)]));
+      if (sorted[2] && b.pct) infos.set(sorted[2].join(","), [["", `+${b.pct}%`], ["", b.text]]);
+      if (b.border) it.cells.filter(b.onEdge).forEach(([x, y]) => edges.set(`${x},${y}`, b.border));
     });
     result.pieces.forEach((pc, j) => {
       pc.cells.forEach(([x, y]) => owner.set(`${x},${y}`, { id: "p" + j, piece: true }));
       const [fx, fy] = firstCell(pc.cells);
-      tags.set(`${fx},${fy}`, [pc.value > 0 ? "+" + pc.value : "0", null]);
+      const m = maxAttr(resultGoal);
+      if (m >= 0) {
+        const v = pc.values[m];
+        tags.set(`${fx},${fy}`, [v > 0 ? "+" + v : String(v), null]);
+      }
     });
   }
   const ink = "var(--ink)";
@@ -373,10 +577,15 @@ function renderBoard() {
         if (!same(0, 1)) sh.push(`inset 0 -2.5px 0 ${ink}`);
         if (!same(-1, 0)) sh.push(`inset 2.5px 0 0 ${ink}`);
         if (!same(1, 0)) sh.push(`inset -2.5px 0 0 ${ink}`);
+        const edge = edges.get(key), accent = "var(--accent)";
+        if (edge) sh.unshift({ top: `inset 0 6px 0 ${accent}`, bottom: `inset 0 -6px 0 ${accent}`,
+          left: `inset 6px 0 0 ${accent}`, right: `inset -6px 0 0 ${accent}` }[edge]);
         cell.style.boxShadow = sh.join(",") || "none";
       }
       const t = tags.get(key);
       if (t) cell.append(el("span", { class: "tag" }, t[0], t[1] ? el("small", {}, t[1]) : null));
+      const info = infos.get(key);
+      if (info) cell.append(el("span", { class: "tag info" }, ...info.map(([l, v]) => el("div", {}, l ? el("i", {}, l) : null, v))));
       board.append(cell);
     }
   }
@@ -394,13 +603,121 @@ function toggleBlocked(x, y) {
 
 /* ---------- items ---------- */
 function renderPalette() {
-  $("#palette").replaceChildren(...Object.keys(SHAPES).map((t) =>
-    el("button", { class: "shape-btn", type: "button", "aria-label": `添加 ${t} 形物品`, onclick: () => addItem(t) },
-      shapeSvg(t, 13), el("b", {}, t))));
+  const btn = (t) => el("button", { class: "shape-btn", type: "button", "aria-label": `添加 ${t} 形物品`, onclick: () => addItem(t) },
+    shapeSvg(t, 13), el("b", {}, t));
+  $("#palette").replaceChildren(
+    ...Object.keys(SHAPES).map(btn),
+    ...customShapes.map((c) => el("div", { class: "custom" }, btn(c.name),
+      el("button", { class: "x", type: "button", "aria-label": `删除自定义形状 ${c.name}`, onclick: () => deleteCustomShape(c.name) }, "×"))),
+    el("button", { class: "shape-btn add", type: "button", "aria-label": "自定义形状", onclick: openShapeEditor },
+      el("b", {}, "+"), el("small", {}, "自定义")));
+}
+
+/** Removes a shape from the palette; items already using it keep their own cells. */
+function deleteCustomShape(name) {
+  if (!confirm(`从形状栏删除自定义形状 ${name}？已添加的物品不受影响。`)) return;
+  customShapes = customShapes.filter((c) => c.name !== name);
+  saveCustomShapes();
+  renderPalette();
+}
+
+let drawn = new Set(); // "x,y" cells picked in the editor
+function openShapeEditor() {
+  drawn = new Set();
+  $("#drawErr").textContent = "";
+  renderDrawGrid();
+  $("#shapeEditor").showModal();
+}
+function renderDrawGrid() {
+  const cells = [];
+  for (let y = 0; y < DRAW_SIDE; y++) for (let x = 0; x < DRAW_SIDE; x++) {
+    const k = `${x},${y}`;
+    cells.push(el("button", { type: "button", "aria-label": `第 ${y + 1} 行第 ${x + 1} 列`, "aria-pressed": String(drawn.has(k)),
+      onclick: () => { if (!drawn.delete(k)) drawn.add(k); renderDrawGrid(); } }));
+  }
+  $("#drawGrid").replaceChildren(...cells);
+}
+function submitShape(e) {
+  e.preventDefault();
+  const cells = [...drawn].map((k) => k.split(",").map(Number));
+  if (cells.length === 0) { $("#drawErr").textContent = "请至少点选一个格子"; return; }
+  if (!connected(cells)) { $("#drawErr").textContent = "格子要上下左右连在一起"; return; }
+  $("#shapeEditor").close();
+  const known = customShapes.length;
+  const type = typeForShape(cells);
+  renderPalette();
+  addItem(type);
+  setStatus(SHAPES[type] ? `这个形状就是内置的 ${type}，已按 ${type} 添加`
+    : customShapes.length > known ? `已新建自定义形状 ${type} 并添加物品`
+    : `这个形状和已有的 ${type} 相同，已按 ${type} 添加`, "ok");
+}
+
+/* ---------- preset groups: named item lists, kept in this browser ---------- */
+const GROUP_STORE = "knapsack-groups-v1";
+let groups = loadGroups();
+
+function loadGroups() {
+  try {
+    const list = JSON.parse(localStorage.getItem(GROUP_STORE));
+    if (Array.isArray(list)) return list.filter((g) => g && typeof g.name === "string" && Array.isArray(g.items));
+  } catch (e) { /* fall through */ }
+  return [];
+}
+function saveGroups() { localStorage.setItem(GROUP_STORE, JSON.stringify(groups)); renderGroups(); }
+const copyItems = (items) => JSON.parse(JSON.stringify(items));
+
+/** Saves the current item list under a name; an existing group of that name is replaced after asking. */
+function saveGroup(name) {
+  name = name.trim();
+  if (!name) return setStatus("请先输入预设组名称", "err");
+  if (state.items.length === 0) return setStatus("当前没有物品，无法保存", "err");
+  const i = groups.findIndex((g) => g.name === name);
+  if (i >= 0 && !confirm(`已有名为「${name}」的预设组，要覆盖吗？`)) return;
+  const group = { name, items: copyItems(state.items) };
+  if (i >= 0) groups[i] = group; else groups.push(group);
+  saveGroups();
+  $("#groupName").value = "";
+  setStatus(`已保存预设组「${name}」`, "ok");
+}
+
+/** Replaces the current item list with a group's (after asking if the list isn't empty). */
+function loadGroup(g) {
+  if (state.items.length > 0 && !confirm(`用预设组「${g.name}」替换当前的物品列表吗？`)) return;
+  state.items = upgrade({ items: copyItems(g.items) }).items;
+  invalidate();
+  setStatus(`已载入预设组「${g.name}」`, "ok");
+}
+
+function renderGroups() {
+  const list = $("#presets");
+  if (groups.length === 0) {
+    list.replaceChildren(el("p", { class: "empty-note" }, "填好物品后，输入组名并保存；以后点一下组名就能载入整组物品。"));
+    return;
+  }
+  list.replaceChildren(...groups.map((g, i) => {
+    const types = [...new Map(g.items.map((it) => [it.type, cellsOf(it)])).entries()].slice(0, 4);
+    const count = g.items.reduce((s, it) => s + (it.qty || 1), 0);
+    return el("div", {
+      class: "preset", role: "button", tabindex: "0", title: `载入「${g.name}」`,
+      onclick: () => loadGroup(g),
+      onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); loadGroup(g); } },
+    },
+    el("span", { class: "icons" }, ...types.map(([t, cells]) => shapeSvg(t, 6, cells))),
+    el("span", {}, el("b", {}, g.name), el("small", {}, `${g.items.length} 种 · 共 ${count} 件`)),
+    el("button", {
+      class: "x", type: "button", "aria-label": `删除预设组「${g.name}」`,
+      onclick: (e) => {
+        e.stopPropagation();
+        if (confirm(`删除预设组「${g.name}」？`)) { groups.splice(i, 1); saveGroups(); }
+      },
+    }, "×"));
+  }));
 }
 
 function addItem(type) {
-  state.items.push({ type, name: "", value: 30, border: "", adj: false, qty: 1 });
+  const item = { type, name: "", perf: 0, qual: 0, eff: 0, border: "", adj: false, required: false, qty: 1 };
+  if (!SHAPES[type]) item.cells = customCells(type);
+  state.items.push(item);
   invalidate();
   const inputs = document.querySelectorAll("#rows tr:last-child input[type=text]");
   if (inputs.length) inputs[0].focus();
@@ -414,50 +731,125 @@ function renderRows() {
   });
   const rows = state.items.map((it, r) => {
     const set = (k, parse = (v) => v) => (e) => { it[k] = parse(e.target.type === "checkbox" ? e.target.checked : e.target.value); invalidate(); };
-    const typeSel = el("select", { "aria-label": "形状", onchange: set("type") },
-      ...Object.keys(SHAPES).map((t) => el("option", { value: t, selected: t === it.type }, t)));
+    const types = [...Object.keys(SHAPES), ...customShapes.map((c) => c.name)];
+    if (!types.includes(it.type)) types.push(it.type); // custom shape deleted from the palette
+    const typeSel = el("select", { "aria-label": "形状", onchange: (e) => {
+      const t = e.target.value;
+      if (SHAPES[t]) delete it.cells; else it.cells = customCells(t) || it.cells;
+      it.type = t;
+      invalidate();
+    } }, ...types.map((t) => el("option", { value: t, selected: t === it.type }, t)));
     const borderSel = el("select", { "aria-label": "边界奖励", onchange: set("border") },
       ...BORDERS.map(([v, l]) => el("option", { value: v, selected: v === it.border }, l)));
     const used = result ? usedByRow.get(r) || 0 : null;
     return el("tr", {},
-      el("td", { "data-label": "形状" }, el("div", { class: "type-cell" }, shapeSvg(it.type, 9), typeSel)),
+      el("td", { "data-label": "形状" }, el("div", { class: "type-cell" }, shapeSvg(it.type, 9, cellsOf(it)), typeSel)),
       el("td", { "data-label": "名称" },
         el("input", { type: "text", value: it.name, placeholder: `${it.type}${r + 1}`, "aria-label": "名称", onchange: set("name") }),
         used == null ? null : el("span", { class: "used" + (used ? "" : " none") }, used ? `已用 ${used}/${it.qty}` : "未使用")),
-      el("td", { "data-label": "价值" }, el("input", { type: "number", min: 0, step: 1, value: it.value, "aria-label": "价值", onchange: set("value", toInt) })),
+      ...ATTRS.map(([, label, field]) => el("td", { class: "attr", "data-label": label },
+        el("input", { type: "number", step: 1, value: it[field], "aria-label": label, onchange: set(field, toSigned) }))),
       el("td", { "data-label": "边界" }, borderSel),
       el("td", { class: "check", "data-label": "邻接", style: "text-align:center" }, el("input", { type: "checkbox", checked: it.adj, "aria-label": "邻接奖励", onchange: set("adj") })),
+      el("td", { class: "check", "data-label": "必选", style: "text-align:center" }, el("input", { type: "checkbox", checked: it.required, "aria-label": "必选", onchange: set("required") })),
       el("td", { "data-label": "数量" }, el("input", { type: "number", min: 1, max: MAX_ITEMS, step: 1, value: it.qty, "aria-label": "数量", onchange: set("qty", (v) => Math.max(1, toInt(v))) })),
       el("td", {}, el("button", { class: "del", type: "button", "aria-label": "删除", onclick: () => { state.items.splice(r, 1); invalidate(); } }, "×")));
   });
   $("#rows").replaceChildren(...rows);
   $("#emptyHint").hidden = rows.length > 0;
+  $("#clearBtn").disabled = rows.length === 0;
   const total = state.items.reduce((s, it) => s + it.qty, 0);
   $("#count").textContent = `${state.items.length} 种 · 共 ${total} 件`;
 }
 
 function toInt(v) { const n = Math.floor(Number(v)); return Number.isFinite(n) && n >= 0 ? n : 0; }
+function toSigned(v) { const n = Math.trunc(Number(v)); return Number.isFinite(n) ? n : 0; }
+const maxAttr = (goal) => goal.indexOf("max");
+
+/* ---------- goal ---------- */
+function renderGoal() {
+  const goal = state.goal;
+  const setMode = (a, mode) => {
+    if (mode === "max") {
+      const prev = maxAttr(goal);
+      if (prev >= 0 && prev !== a) goal[prev] = "skip"; // at most one maximized attribute
+      goal[a] = "max";
+    } else if (mode === "target") {
+      if (typeof goal[a] !== "number") goal[a] = 0;
+    } else {
+      goal[a] = "skip";
+    }
+    invalidate();
+  };
+  $("#goal").replaceChildren(...ATTRS.map(([, label], a) => {
+    const mode = goal[a] === "max" ? "max" : goal[a] === "skip" ? "skip" : "target";
+    const seg = el("div", { class: "seg", role: "radiogroup", "aria-label": `${label}目标` },
+      ...[["max", "求最大"], ["target", "达标"], ["skip", "跳过"]].map(([m, text]) =>
+        el("button", { type: "button", "aria-pressed": String(mode === m), onclick: () => setMode(a, m) }, text)));
+    const target = mode === "target"
+      ? el("label", {}, "≥ ", el("input", { type: "number", step: 1, value: goal[a], "aria-label": `${label}达标值`,
+          onchange: (e) => { goal[a] = toSigned(e.target.value); invalidate(); } }))
+      : null;
+    return el("div", { class: "goal-row" }, el("b", {}, label), seg, target);
+  }), ...goalNotes(goal));
+}
+
+function goalNotes(goal) {
+  const notes = [];
+  if (maxAttr(goal) < 0) notes.push("未设求最大：在满足达标条件的前提下，让占用的格子最少（特殊矩形也算占用）。");
+  if (goal.some((g) => typeof g === "number")) {
+    notes.push("达标条件较紧时可能需要较长时间（几分钟以上），可以随时取消，或适当调低目标。");
+  }
+  return notes.map((t) => el("p", { class: "goal-note" }, t));
+}
 
 /* ---------- result ---------- */
 function renderResult() {
-  $("#total").hidden = !result;
+  const total = $("#total");
+  total.hidden = !result;
   if (!result) { $("#breakdown").replaceChildren(); return; }
-  $("#totalNum").textContent = result.total;
-  $("#proof").textContent = `已证明最优 · ${result.seconds.toFixed(1)}s · ${result.rounds} 轮`;
-  const itemRows = [...result.items].sort((a, b) => b.finalValue - a.finalValue).map((it) =>
+  if (!result.feasible) {
+    const inf = result.infeasible;
+    const reasons = inf.requiredImpossible
+      ? [el("li", {}, "必选物品无法同时放进棋盘")]
+      : inf.targetBest.map((t) => el("li", {}, `${ATTRS[t.attr][1]}目标 ≥ ${t.target}，单独最多只能到 ${t.best}`));
+    total.replaceChildren(el("div", { class: "infeasible" },
+      "无法满足所有条件（已证明不存在满足条件的摆法）：", el("ul", {}, ...reasons),
+      inf.targetBest.length > 1 ? "多个目标单独都可达时，说明它们无法同时满足，可以适当调低目标。" : null));
+    $("#breakdown").replaceChildren();
+    return;
+  }
+  const goal = resultGoal;
+  const main = maxAttr(goal);
+  const order = main < 0 ? [0, 1, 2] : [main, ...[0, 1, 2].filter((a) => a !== main)];
+  const emptyCells = main < 0
+    ? el("span", { class: "main" }, el("span", { class: "num" }, String(result.emptyCells)), el("span", { class: "lbl" }, "空格 · 最多"))
+    : null;
+  total.replaceChildren(
+    el("div", { class: "totals" }, emptyCells, ...order.map((a) => {
+      const g = goal[a];
+      return el("span", { class: (a === main ? "main" : "sub") + (g === "skip" ? " skip" : "") },
+        el("span", { class: "num" }, String(result.totals[a])),
+        el("span", { class: "lbl" }, ATTRS[a][1] + (a === main ? " · 最大" : "")),
+        typeof g === "number" ? el("span", { class: "met" }, `✓ ≥ ${g}`) : null);
+    })),
+    el("span", { class: "proof" }, `已证明最优 · ${result.seconds.toFixed(1)}s · ${result.rounds} 轮`));
+  const cell = (a, v, base) => el("td", { class: "num" + (goal[a] === "skip" ? " skip" : "") },
+    String(v), base != null && base !== v ? el("span", { class: "base" }, `(${base})`) : null);
+  const bonusCell = (b) => el("td", { class: "num bonus" }, b.pct ? `+${b.pct}%` : "—", b.text ? el("small", {}, b.text) : null);
+  const itemRows = [...result.items].sort((a, b) => b.values[order[0]] - a.values[order[0]]).map((it) =>
     el("tr", {},
       el("td", {}, el("span", { class: "chip", style: `background:${rowColor(resultRows[it.index])}` }), it.name),
-      el("td", {}, it.type || "—"),
-      el("td", { class: "num" }, String(it.value)),
-      el("td", { class: "num plus" }, it.finalValue > it.value ? "+" + (it.finalValue - it.value) : ""),
-      el("td", { class: "num" }, String(it.finalValue))));
-  const pieceSum = result.pieces.reduce((s, p) => s + p.value, 0);
+      bonusCell(bonusOf(it)),
+      ...order.map((a) => cell(a, it.values[a], it.base[a]))));
+  const pieceSum = (a) => result.pieces.reduce((s, p) => s + p.values[a], 0);
   const pieceRow = el("tr", {},
     el("td", {}, el("span", { class: "chip", style: "background:repeating-linear-gradient(-45deg,#ece4d4 0 3px,#cbbfa8 3px 6px)" }), `特殊矩形 ×${result.pieces.length}`),
-    el("td", {}, "1×2"), el("td", { class: "num" }, ""), el("td", { class: "num" }, ""),
-    el("td", { class: "num" }, String(pieceSum)));
+    el("td", {}),
+    ...order.map((a) => cell(a, pieceSum(a), null)));
   $("#breakdown").replaceChildren(el("table", {},
-    el("thead", {}, el("tr", {}, ...["物品", "形状", "基础", "加成", "最终"].map((h, i) => el("th", { class: i >= 2 ? "num" : "" }, h)))),
+    el("thead", {}, el("tr", {}, el("th", {}, "物品（括号内为基础值）"), el("th", { class: "num" }, "加成"),
+      ...order.map((a) => el("th", { class: "num" }, ATTRS[a][1])))),
     el("tbody", {}, ...itemRows, pieceRow)));
 }
 
@@ -465,6 +857,7 @@ function render() {
   $("#w").value = state.width;
   $("#h").value = state.height;
   renderBoard();
+  renderGoal();
   renderRows();
   renderResult();
 }
@@ -475,13 +868,19 @@ function buildRequest() {
   state.items.forEach((it, r) => {
     const base = it.name.trim() || `${it.type}${r + 1}`;
     for (let k = 0; k < it.qty; k++) {
-      const item = { name: it.qty > 1 ? `${base}#${k + 1}` : base, value: it.value, type: it.type, adjBonus: it.adj };
+      const item = {
+        name: it.qty > 1 ? `${base}#${k + 1}` : base,
+        ...(SHAPES[it.type] ? { type: it.type } : { shape: it.cells }),
+        performance: it.perf, quality: it.qual, efficiency: it.eff, adjBonus: it.adj,
+      };
       if (it.border) item.border = it.border;
+      if (it.required) item.required = true;
       items.push(item);
       rows.push(r);
     }
   });
-  return { request: { width: state.width, height: state.height, blocked: state.blocked, items }, rows };
+  const goal = Object.fromEntries(ATTRS.map(([name], a) => [name, state.goal[a]]));
+  return { request: { width: state.width, height: state.height, blocked: state.blocked, goal, items }, rows };
 }
 
 function setStatus(text, kind = "") {
@@ -490,45 +889,69 @@ function setStatus(text, kind = "") {
   s.className = "status" + (kind ? " " + kind : "");
 }
 
+// Starting the engine downloads the WASM and spawns one worker per core, each fetching its own
+// scripts: dozens of requests that take seconds over a real network. So it is started as soon as
+// the page loads and reused across solves.
+const ENGINE_MEMORY_LIMIT = 1 << 30; // WASM memory never shrinks: recycle the engine after big solves
+function startEngine() {
+  if (engine) return engine;
+  engine = new Worker(new URL("./solver.worker.js", import.meta.url), { type: "module" });
+  // optional ?threads=N caps the CPU cores used (default: all)
+  const threads = Number(new URLSearchParams(location.search).get("threads")) || undefined;
+  engine.postMessage({ type: "init", threads });
+  return engine;
+}
+function stopEngine() {
+  engine?.terminate(); // also ends the thread pool
+  engine = null;
+}
+
 function solve() {
-  if (worker) return cancelSolve();
+  if (solving) return cancelSolve();
   const { request, rows } = buildRequest();
   if (request.items.length === 0) return setStatus("请先添加物品", "err");
   if (request.items.length > MAX_ITEMS) return setStatus(`物品最多 ${MAX_ITEMS} 件`, "err");
   const btn = $("#solveBtn");
   btn.textContent = "取消";
   btn.classList.add("cancel");
+  solving = true;
   const t0 = performance.now();
-  let progress = "";
-  const tick = () => setStatus(`求解中… ${((performance.now() - t0) / 1000).toFixed(0)}s ${progress}`);
+  let progress = "· 准备计算引擎";
+  const hasTargets = state.goal.some((g) => typeof g === "number");
+  const tick = () => {
+    const secs = (performance.now() - t0) / 1000;
+    const hint = hasTargets && secs > 15 ? " · 条件较紧，可以取消后调低目标" : "";
+    setStatus(`求解中… ${secs.toFixed(0)}s ${progress}${hint}`);
+  };
   const timer = setInterval(tick, 250);
   tick();
-  const finish = (text, kind) => {
+  const finish = (text, kind, keepEngine) => {
     clearInterval(timer);
-    worker?.terminate(); // also ends the solver's thread pool
-    worker = null;
+    solving = false;
+    if (!keepEngine) stopEngine();
     btn.textContent = "求最优解";
     btn.classList.remove("cancel");
     setStatus(text, kind);
+    if (!engine) startEngine(); // warm a fresh one for next time
   };
-  cancelSolve = () => finish("已取消", "");
-  worker = new Worker(new URL("./solver.worker.js", import.meta.url), { type: "module" });
+  cancelSolve = () => finish("已取消", "", false);
+  const worker = startEngine();
   worker.onmessage = ({ data }) => {
     if (data.type === "progress") {
       progress = `· 第 ${data.round} 轮 ${Math.round((100 * (data.pos + 1)) / data.cells)}%`;
     } else if (data.type === "done") {
       result = data.result;
+      result.seconds = (performance.now() - t0) / 1000; // what the user waited, startup included
       resultRows = rows;
-      finish("完成", "ok");
+      resultGoal = [...state.goal];
+      finish(result.feasible ? "完成" : "无法达标", result.feasible ? "ok" : "err", data.memoryBytes < ENGINE_MEMORY_LIMIT);
       render();
     } else {
-      finish("出错：" + data.message, "err");
+      finish("出错：" + data.message, "err", false);
     }
   };
-  worker.onerror = (e) => finish("出错：" + (e.message || "求解线程崩溃（可能是内存不足）"), "err");
-  // optional ?threads=N caps the CPU cores used (default: all)
-  const threads = Number(new URLSearchParams(location.search).get("threads")) || undefined;
-  worker.postMessage({ problem: request, threads });
+  worker.onerror = (e) => finish("出错：" + (e.message || "求解线程崩溃（可能是内存不足）"), "err", false);
+  worker.postMessage({ type: "solve", problem: request });
 }
 let cancelSolve = () => {};
 
@@ -543,11 +966,23 @@ function importJson(text) {
   const p = JSON.parse(text);
   if (!Number.isInteger(p.width) || !Number.isInteger(p.height) || !Array.isArray(p.items)) throw new Error("缺少 width/height/items");
   const items = p.items.map((it) => {
-    const type = it.type || Object.keys(SHAPES).find((t) => JSON.stringify(SHAPES[t]) === JSON.stringify(it.shape));
-    if (!SHAPES[type]) throw new Error(`物品 ${it.name} 的形状不是内置的 6 种之一`);
-    return { type, name: it.name || "", value: toInt(it.value), border: it.border || "", adj: !!it.adjBonus, qty: 1 };
+    let type = it.type;
+    if (type && !SHAPES[type]) throw new Error(`物品 ${it.name} 的 type「${type}」不是内置形状`);
+    if (!type) {
+      const ok = Array.isArray(it.shape) && it.shape.length > 0
+        && it.shape.every((c) => Array.isArray(c) && c.length === 2 && c.every(Number.isInteger));
+      if (!ok || !connected(it.shape)) throw new Error(`物品 ${it.name} 缺少 type，或 shape 不是连在一起的格子`);
+      type = typeForShape(it.shape);
+    }
+    return {
+      type, ...(SHAPES[type] ? {} : { cells: customCells(type) }), name: it.name || "", perf: toSigned(it.performance ?? it.value), qual: toSigned(it.quality),
+      eff: toSigned(it.efficiency), border: it.border || "", adj: !!it.adjBonus, required: !!it.required, qty: 1,
+    };
   });
-  state = { width: p.width, height: p.height, blocked: p.blocked || [], items };
+  const goal = ATTRS.map(([name], a) => p.goal?.[name] ?? (a === 0 ? "max" : "skip"));
+  if (goal.filter((g) => g === "max").length > 1) throw new Error("goal 里最多只能有一个属性是 \"max\"");
+  state = { width: p.width, height: p.height, blocked: p.blocked || [], items, goal };
+  renderPalette();
   invalidate();
 }
 
@@ -562,9 +997,20 @@ function setDim(key, input) {
 
 async function init() {
   renderPalette();
+  renderGroups();
+  $("#shapeForm").addEventListener("submit", submitShape);
+  $("#drawCancel").addEventListener("click", () => $("#shapeEditor").close());
+  $("#groupSave").addEventListener("submit", (e) => { e.preventDefault(); saveGroup($("#groupName").value); });
   $("#w").addEventListener("change", (e) => setDim("width", e.target));
   $("#h").addEventListener("change", (e) => setDim("height", e.target));
   $("#solveBtn").addEventListener("click", solve);
+  $("#clearBtn").addEventListener("click", () => {
+    if (!confirm(`清空全部 ${state.items.length} 种物品？（预设组不受影响）`)) return;
+    state.items = [];
+    $("#itemList").open = true;
+    invalidate();
+    setStatus("已清空物品", "ok");
+  });
   $("#exportBtn").addEventListener("click", exportJson);
   $("#importBtn").addEventListener("click", () => $("#importFile").click());
   $("#importFile").addEventListener("change", async (e) => {
@@ -575,6 +1021,7 @@ async function init() {
     catch (err) { setStatus("导入失败：" + err.message, "err"); }
   });
   render();
+  startEngine();
 }
 init().catch((e) => setStatus("初始化失败：" + e.message, "err"));
 </script>

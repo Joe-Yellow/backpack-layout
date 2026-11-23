@@ -6,15 +6,37 @@ use crate::problem::Problem;
 use std::collections::HashSet;
 
 pub struct Score {
-    pub total: i64,
-    pub item_values: Vec<i64>,
-    pub domino_values: Vec<i64>,
+    /// Totals per attribute (performance, quality, efficiency).
+    pub totals: [i64; 3],
+    pub item_values: Vec<[i64; 3]>,
+    pub domino_values: Vec<[i64; 3]>,
+    /// Non-blocked cells covered by neither an item nor a piece.
+    pub empty_cells: i64,
+}
+
+impl Score {
+    /// Every required item is placed and every target is met.
+    pub fn feasible(&self, p: &Problem, l: &Layout) -> bool {
+        let required_placed = p
+            .items
+            .iter()
+            .zip(&l.item_cells)
+            .all(|(it, cells)| !it.required || cells.is_some());
+        required_placed && p.goal.targets.iter().all(|&(a, t)| self.totals[a] >= t)
+    }
+
+    /// The maximized attribute's total, or the empty cells when none is maximized.
+    pub fn objective(&self, p: &Problem) -> i64 {
+        p.goal.maximize.map_or(self.empty_cells, |a| self.totals[a])
+    }
 }
 
 const FREE: i64 = -1;
 const BLOCKED: i64 = -2;
 
-/// Errors if the layout breaks any placement rule.
+/// Errors if the layout breaks any placement rule. Percentages round toward zero (Rust `/`),
+/// for negative values too: an item's border and adjacency bonuses are merged before rounding,
+/// and a piece takes 20% of the summed bases of its neighbours.
 pub fn evaluate(p: &Problem, l: &Layout) -> Result<Score, String> {
     let (w, h) = (p.width as usize, p.height as usize);
     let n = p.items.len();
@@ -57,7 +79,7 @@ pub fn evaluate(p: &Problem, l: &Layout) -> Result<Score, String> {
     }
 
     let mut adjacent_dominoes = vec![0i64; n];
-    let domino_values: Vec<i64> = l
+    let domino_values: Vec<[i64; 3]> = l
         .dominoes
         .iter()
         .map(|cells| {
@@ -67,20 +89,22 @@ pub fn evaluate(p: &Problem, l: &Layout) -> Result<Score, String> {
                 .filter(|&nb| owner[nb] >= 0 && (owner[nb] as usize) < n)
                 .map(|nb| owner[nb] as usize)
                 .collect();
-            let sum: i64 = items.iter().map(|&i| p.items[i].value as i64).sum();
             for &i in &items {
                 adjacent_dominoes[i] += 1;
             }
-            sum / 5 // floor(20% of the merged sum)
+            std::array::from_fn(|a| {
+                let sum: i64 = items.iter().map(|&i| p.items[i].attrs[a] as i64).sum();
+                sum / 5 // 20% of the merged sum, toward zero
+            })
         })
         .collect();
-    let item_values: Vec<i64> = p
+    let item_values: Vec<[i64; 3]> = p
         .items
         .iter()
         .enumerate()
         .map(|(i, it)| {
             let Some(cells) = &l.item_cells[i] else {
-                return 0;
+                return [0; 3];
             };
             let t = touches(it.border, cells, w, h) as i64;
             let k = if it.adj_bonus {
@@ -88,14 +112,21 @@ pub fn evaluate(p: &Problem, l: &Layout) -> Result<Score, String> {
             } else {
                 0
             };
-            let v = it.value as i64;
-            v + v * (2 * t + k) / 10 // merged, then floored
+            std::array::from_fn(|a| {
+                let v = it.attrs[a] as i64;
+                v + v * (2 * t + k) / 10 // merged, then toward zero
+            })
         })
         .collect();
-    let total = item_values.iter().sum::<i64>() + domino_values.iter().sum::<i64>();
+    let totals = std::array::from_fn(|a| {
+        item_values.iter().map(|v| v[a]).sum::<i64>()
+            + domino_values.iter().map(|v| v[a]).sum::<i64>()
+    });
+    let empty_cells = owner.iter().filter(|&&o| o == FREE).count() as i64;
     Ok(Score {
-        total,
+        totals,
         item_values,
         domino_values,
+        empty_cells,
     })
 }
