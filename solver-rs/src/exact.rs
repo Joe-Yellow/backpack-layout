@@ -52,7 +52,8 @@ pub struct Solution {
     pub value: i64,
     pub layout: Layout,
     pub rounds: u32,
-    pub tracked_items: u32,
+    /// Item bits limited to one use in the last round.
+    pub tracked: u64,
     pub nodes: u64,
 }
 
@@ -80,6 +81,8 @@ struct Entry {
     acc: Score,
     used: u64,
     ents: Ents,
+    /// Bit j: slot j meets its target whatever comes next (see Ctx::settle).
+    settled: u8,
 }
 
 struct ChildRec {
@@ -113,6 +116,26 @@ struct Ctx<'a> {
     caps: [i32; SLOTS],
 }
 
+impl Ctx<'_> {
+    /// Target slots with negative values (no cap) that meet their target even after the most
+    /// the rest of the layout can still take away: like a capped slot, nothing left to compare.
+    fn settle(&self, acc: &Score, ents: &Ents, used: u64, tracked: u64) -> u8 {
+        let mut bits = 0;
+        for j in 1..SLOTS {
+            let Some(t) = self.targets[j] else { continue };
+            if self.caps[j] != i32::MAX || acc[j] < t {
+                continue;
+            }
+            let ok = self
+                .sweep
+                .future_loss(j, ents, used, tracked)
+                .is_some_and(|loss| acc[j] as i64 - loss >= t as i64);
+            bits |= u8::from(ok) << j;
+        }
+        bits
+    }
+}
+
 /// Solves exactly. Fails only when the browser memory budget is exceeded.
 ///
 /// Targets first get a cheap pass without them: if that optimum happens to meet every target it is
@@ -123,6 +146,7 @@ pub fn solve(
     on_progress: &mut dyn FnMut(u32, usize, usize),
 ) -> Result<Outcome, String> {
     let mut rounds_before = 0;
+    let mut tracked = 0;
     let mut nodes_before = 0;
     if !p.goal.targets.is_empty() {
         let relaxed = Problem {
@@ -132,7 +156,7 @@ pub fn solve(
             },
             ..p.clone()
         };
-        match solve_exact(&relaxed, 0, on_progress)? {
+        match solve_exact(&relaxed, 0, 0, on_progress)? {
             // only the required items can make the untargeted problem infeasible
             Outcome::Infeasible => return Ok(Outcome::Infeasible),
             Outcome::Solved(sol) => {
@@ -141,11 +165,12 @@ pub fn solve(
                     return Ok(Outcome::Solved(sol));
                 }
                 rounds_before = sol.rounds;
+                tracked = sol.tracked; // the classes it had to limit: start from them
                 nodes_before = sol.nodes;
             }
         }
     }
-    Ok(match solve_exact(p, rounds_before, on_progress)? {
+    Ok(match solve_exact(p, rounds_before, tracked, on_progress)? {
         Outcome::Solved(mut sol) => {
             sol.rounds += rounds_before;
             sol.nodes += nodes_before;
@@ -155,10 +180,12 @@ pub fn solve(
     })
 }
 
-/// Rounds are numbered from `round_base + 1` in progress reports.
+/// Rounds are numbered from `round_base + 1` in progress reports. `initial_tracked` items start
+/// limited to one use (any set is sound: tracking is only ever added).
 fn solve_exact(
     p: &Problem,
     round_base: u32,
+    initial_tracked: u64,
     on_progress: &mut dyn FnMut(u32, usize, usize),
 ) -> Result<Outcome, String> {
     let mut slots = vec![p.goal.maximize];
@@ -178,7 +205,7 @@ fn solve_exact(
         targets,
         caps,
     };
-    let mut tracked = sweep.required;
+    let mut tracked = sweep.required | initial_tracked;
     let mut total_nodes = 0;
     let mut phases = [0.0; 3];
     for round in 1.. {
@@ -199,7 +226,7 @@ fn solve_exact(
                 value: acc as i64,
                 layout: to_layout(&sweep, &path, p.items.len()),
                 rounds: round,
-                tracked_items: tracked.count_ones(),
+                tracked,
                 nodes: total_nodes,
             }));
         }
@@ -247,6 +274,7 @@ fn run_round(
                 acc: [0; SLOTS],
                 used: 0,
                 ents: Ents::new(),
+                settled: 0,
             },
             parent: NO_PARENT,
             step_pos: 0,
@@ -341,6 +369,8 @@ fn expand_batch(
                     let parent = shard << (32 - SHARD_BITS) | e.id;
                     sweep.expand(key, &e.ents, e.used, tracked, &mut sc, &mut |c| {
                         let s = shard_of(&c.key);
+                        let acc = std::array::from_fn(|j| (e.acc[j] + c.gain[j]).min(ctx.caps[j]));
+                        let settled = ctx.settle(&acc, &c.ents, c.used, tracked);
                         push(&mut out.by_shard[s], out.children.len() as u32);
                         push(
                             &mut out.children,
@@ -348,11 +378,10 @@ fn expand_batch(
                                 layer: Sweep::pos_of(&c.key),
                                 entry: Entry {
                                     id: 0,
-                                    acc: std::array::from_fn(|j| {
-                                        (e.acc[j] + c.gain[j]).min(ctx.caps[j])
-                                    }),
+                                    acc,
                                     used: c.used,
                                     ents: c.ents,
+                                    settled,
                                 },
                                 key: c.key,
                                 parent,
@@ -395,6 +424,7 @@ impl Shard {
             acc: rec.entry.acc,
             used: rec.entry.used,
             ents: rec.entry.ents.clone(),
+            settled: rec.entry.settled,
         };
         let mut at = 0;
         while at < front.len() && front[at].acc[0] >= e.acc[0] {
@@ -442,7 +472,8 @@ fn dominates(ctx: &Ctx, a: &Entry, b: &Entry) -> bool {
     // per slot: what A is ahead now, minus what B's open entities may still gain over A's
     let mut slack: [i64; SLOTS] = std::array::from_fn(|j| a.acc[j] as i64 - b.acc[j] as i64);
     // a capped slot already meets its target and can only grow: nothing to compare there
-    let settled: [bool; SLOTS] = std::array::from_fn(|j| a.acc[j] >= ctx.caps[j]);
+    let settled: [bool; SLOTS] =
+        std::array::from_fn(|j| a.acc[j] >= ctx.caps[j] || a.settled & 1 << j != 0);
     if (0..SLOTS).any(|j| !settled[j] && slack[j] < 0) {
         return false;
     }

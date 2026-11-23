@@ -132,6 +132,12 @@ pub struct Sweep {
     slots: usize,
     /// Upper bound on the pieces one item can still become adjacent to.
     max_adjacency: i32,
+    /// Per slot: items with a negative value there.
+    neg_items: [u64; SLOTS],
+    /// Per item bit: the most placing it can lower each slot, its later adjacencies included.
+    item_loss: Vec<Score>,
+    /// Per value class: the most an already placed item can still lower each slot.
+    open_loss: Vec<Score>,
 }
 
 impl Sweep {
@@ -195,6 +201,8 @@ impl Sweep {
         let mut vclasses = Vec::new();
         let mut classes = Vec::new();
         let mut by_anchor: Vec<Vec<Anchored>> = (0..n).map(|_| Vec::new()).collect();
+        let mut item_loss = vec![[0; SLOTS]; p.items.len()];
+        let mut open_k: Vec<i32> = Vec::new(); // per value class: most adjacent pieces
         for members in groups {
             let rep = &p.items[members[0]];
             let vals = slot_vals(members[0]);
@@ -208,6 +216,28 @@ impl Sweep {
                 vclasses.len() - 1
             });
             let mask = members.iter().fold(0u64, |m, &i| m | 1 << i);
+            // distinct adjacent pieces each cover one of the shape's neighbour cells
+            let k = neighbour_cells(&rep.shape) as i32;
+            if open_k.len() <= vclass {
+                open_k.resize(vclass + 1, 0);
+            }
+            open_k[vclass] = open_k[vclass].max(k);
+            for &i in &members {
+                item_loss[i] = std::array::from_fn(|j| {
+                    let v = vals[j];
+                    if v >= 0 {
+                        return 0;
+                    }
+                    let m = if rep.border.is_some() { 2 } else { 0 };
+                    let own = -v
+                        + if rep.adj_bonus {
+                            -v * (m + k) / 10
+                        } else {
+                            -v * m / 10
+                        };
+                    own + k * ((-v + 4) / 5)
+                });
+            }
             let cls = classes.len();
             for pl in placements(p, members[0]) {
                 let mut sc: Vec<usize> = pl.cells.iter().map(|&c| cell_to_scan[c]).collect();
@@ -249,6 +279,26 @@ impl Sweep {
         let nonneg = std::array::from_fn(|j| vclasses.iter().all(|vc| vc.vals[j] >= 0));
         // each adjacent piece covers a distinct neighbour cell: at most 4 per item cell
         let max_adjacency = 4 * p.items.iter().map(|it| it.shape.len()).max().unwrap_or(0) as i32;
+        let neg_items = std::array::from_fn(|j| {
+            (0..p.items.len())
+                .filter(|&i| slot_vals(i)[j] < 0)
+                .fold(0u64, |m, i| m | 1 << i)
+        });
+        let open_loss = vclasses
+            .iter()
+            .enumerate()
+            .map(|(c, vc)| {
+                let k = open_k[c];
+                std::array::from_fn(|j| {
+                    let v = vc.vals[j];
+                    if v >= 0 {
+                        return 0;
+                    }
+                    let bonus = if vc.adj_bonus { -v * k / 10 + 1 } else { 0 };
+                    bonus + k * ((-v + 4) / 5)
+                })
+            })
+            .collect();
 
         let mut sweep = Sweep {
             n,
@@ -268,6 +318,9 @@ impl Sweep {
             empty_reward,
             nonneg,
             max_adjacency,
+            neg_items,
+            item_loss,
+            open_loss,
             slots: slots.len(),
         };
         let mut sc = sweep.scratch();
@@ -393,6 +446,26 @@ impl Sweep {
         }
     }
 
+    /// The most slot j can still drop from this state, or None if unbounded (a negative class that
+    /// isn't tracked may be placed any number of times). Only negative values ever lower a slot:
+    /// unplaced negative items, and the bonuses and pieces of placed ones still open.
+    pub fn future_loss(&self, j: usize, ents: &[Ent], used: u64, tracked: u64) -> Option<i64> {
+        let neg = self.neg_items[j];
+        if neg & !tracked != 0 {
+            return None;
+        }
+        let mut loss = 0i64;
+        let mut todo = neg & !used;
+        while todo != 0 {
+            loss += self.item_loss[todo.trailing_zeros() as usize][j] as i64;
+            todo &= todo - 1;
+        }
+        for e in ents.iter().filter(|e| !e.is_piece()) {
+            loss += self.open_loss[e.vclass()][j] as i64;
+        }
+        Some(loss)
+    }
+
     /// Cells still needed by required items not placed yet.
     fn required_area(&self, used: u64) -> u32 {
         let mut missing = self.required & !used;
@@ -515,11 +588,11 @@ impl Sweep {
     pub fn penalty(&self, a: &Ent, b: &Ent) -> Option<Score> {
         if a.is_piece() {
             // future gain trunc((S + X) / 5) - trunc(S / 5): only the remainder matters where
-            // nothing is negative (floor); otherwise each trunc is within 1 of its argument
+            // nothing is negative (floor); otherwise see piece_penalty
             return Some(std::array::from_fn(|j| match (a.sums[j], b.sums[j]) {
                 (x, y) if x == y => 0,
                 (x, y) if self.nonneg[j] => i32::from(x < y),
-                _ => 3,
+                (x, y) => piece_penalty(x, y),
             }));
         }
         let (va, vb) = (&self.vclasses[a.vclass()], &self.vclasses[b.vclass()]);
@@ -633,5 +706,52 @@ impl Sweep {
             },
             free,
         )
+    }
+}
+
+/// Cells outside the shape that touch it.
+fn neighbour_cells(shape: &[[i32; 2]]) -> usize {
+    let mut out: Vec<[i32; 2]> = Vec::new();
+    for &[x, y] in shape {
+        for n in [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]] {
+            if !shape.contains(&n) && !out.contains(&n) {
+                out.push(n);
+            }
+        }
+    }
+    out.len()
+}
+
+/// Exact max over any future sum X of [t(b + X) - t(b)] - [t(a + X) - t(a)], t = trunc(/5):
+/// the most a piece with sum b can still gain over one with sum a. With d = b - a, the first
+/// bracket difference t(y + d) - t(y) peaks at ceil(d / 5) for d >= 0; for d < 0 it peaks at
+/// -max(0, (|d| + 1) / 5 - 1), reached where y and y + d straddle zero (trunc's wide zero bucket).
+fn piece_penalty(a: i32, b: i32) -> i32 {
+    let (a, b) = (a as i64, b as i64);
+    let d = b - a;
+    let peak = if d >= 0 {
+        (d + 4) / 5
+    } else {
+        -(((-d + 1) / 5 - 1).max(0))
+    };
+    (peak - (b / 5 - a / 5)) as i32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::piece_penalty;
+
+    #[test]
+    fn piece_penalty_matches_brute_force() {
+        let t = |x: i32| x / 5;
+        for a in -60..=60 {
+            for b in -60..=60 {
+                let brute = (-400..=400)
+                    .map(|x| (t(b + x) - t(b)) - (t(a + x) - t(a)))
+                    .max()
+                    .unwrap();
+                assert_eq!(piece_penalty(a, b), brute, "a={a} b={b}");
+            }
+        }
     }
 }
