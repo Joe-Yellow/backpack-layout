@@ -10,13 +10,18 @@ use std::collections::{HashMap, HashSet};
 
 pub type Cell = [i32; 2];
 
-pub const MAX_ITEMS: usize = 63;
+/// Items accepted in the input; the solver then drops items that can't matter (see reduce).
+pub const MAX_ITEMS: usize = 5000;
+/// Items the exact solver can take after that (u64 item sets).
+pub const EXACT_MAX_ITEMS: usize = 63;
+/// Items the fast mode keeps: more are cut greedily by value per cell.
+pub const FAST_MAX_ITEMS: usize = 255;
 pub const MAX_SIDE: i32 = 12;
 pub const MAX_ABS_VALUE: i64 = 1_000_000;
 /// JSON names of the attributes, in index order.
 pub const ATTRS: [&str; 3] = ["performance", "quality", "efficiency"];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Border {
     Top,
@@ -69,6 +74,9 @@ pub struct ProblemInput {
     /// Defaults to {"performance": "max"}.
     #[serde(default)]
     pub goal: Option<HashMap<String, GoalSpec>>,
+    /// "exact" (default): proven optimum. "fast": beam search, approximate but quick.
+    #[serde(default)]
+    pub mode: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -98,6 +106,8 @@ pub struct Problem {
     pub blocked: Vec<Cell>,
     pub items: Vec<Item>,
     pub goal: Goal,
+    /// Approximate beam search instead of the exact solver.
+    pub fast: bool,
 }
 
 /// Built-in shapes, usable via `type` (rotations and mirrors are always allowed).
@@ -149,12 +159,18 @@ pub fn validate(input: ProblemInput) -> Result<Problem, String> {
         .map(validate_item)
         .collect::<Result<Vec<_>, _>>()?;
     let goal = validate_goal(input.goal)?;
+    let fast = match input.mode.as_deref() {
+        None | Some("exact") => false,
+        Some("fast") => true,
+        Some(m) => return Err(format!("mode: expected \"exact\" or \"fast\", got \"{m}\"")),
+    };
     Ok(Problem {
         width: w,
         height: h,
         blocked: input.blocked,
         items,
         goal,
+        fast,
     })
 }
 

@@ -1,6 +1,7 @@
 //! Native benchmark: solves the given instance files and prints value, rounds, nodes, the time spent
 //! in each DP phase [gather, expand, insert] and the total. Every result is checked by the verifier.
 //! Thread count: RAYON_NUM_THREADS (defaults to all cores). BENCH_LOG=1 prints round start times.
+//! FAST=1 runs the fast mode (item reduction + beam search) through solve_json instead.
 
 use backpack_solver::{exact, problem, verifier};
 use std::time::Instant;
@@ -21,6 +22,21 @@ fn main() {
 
 fn run(f: &str) -> Result<(), String> {
     let json = std::fs::read_to_string(f).map_err(|e| e.to_string())?;
+    if std::env::var_os("FAST").is_some() {
+        let mut v: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+        v["mode"] = "fast".into();
+        let t0 = Instant::now();
+        let out = backpack_solver::solve_json(&v.to_string(), &mut |_, _, _| {})?;
+        println!(
+            "{f}: fast feasible={} totals={:?} items={} weights_round={} time={:.2}s",
+            out.feasible,
+            out.totals,
+            out.items_considered,
+            out.rounds,
+            t0.elapsed().as_secs_f64()
+        );
+        return Ok(());
+    }
     let p = problem::parse(&json)?;
     let t0 = Instant::now();
     let verbose = std::env::var_os("BENCH_LOG").is_some();

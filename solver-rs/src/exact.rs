@@ -20,8 +20,9 @@
 //! batches; children are bucketed by shard and each shard inserts its bucket on one thread, so no
 //! locks are needed. Steps always move pos forward, so children never land in the layer being read.
 
+use crate::bits::Bits;
 use crate::problem::{Goal, Problem};
-use crate::sweep::{Ents, Key, Score, Sweep, DOMINO, SLOTS};
+use crate::sweep::{pos_of, Ents, Key, Score, Sweep, DOMINO, SLOTS};
 use crate::verifier;
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHasher};
@@ -31,12 +32,14 @@ use std::hash::{Hash, Hasher};
 const SHARDS: usize = 64;
 const SHARD_BITS: u32 = 6;
 const NO_PARENT: u32 = u32::MAX;
-const FRONTS_PER_BATCH: usize = 1 << 12; // bounds the memory held by not-yet-inserted children
+/// Entries expanded per batch: bounds the memory held by not-yet-inserted children. Counted in
+/// entries, not fronts: with targets one front can hold hundreds of entries.
+const ENTRIES_PER_BATCH: usize = 1 << 17;
 /// WASM linear memory caps at 4 GiB and an allocation failure there kills a worker thread, which
 /// hangs the solve; stop cleanly with headroom instead (checked after every batch).
 const WASM_MEMORY_BUDGET: u64 = 3 << 30;
 pub const OUT_OF_MEMORY: &str =
-    "内存不足：这个实例超出了浏览器可用的内存（约 4GB），可以减少物品数量或改用命令行版本";
+    "内存不足：条件组合太复杂，超出了浏览器可用的内存（约 4GB）。可以只保留一个达标条件、调低目标或减少物品";
 
 pub struct Layout {
     /// item_cells[i] = board cells of item i, or None if unused.
@@ -63,13 +66,18 @@ pub enum Outcome {
     Infeasible,
 }
 
-/// Search-tree node kept to rebuild the layout: parent id and the step taken at pos.
+/// Search-tree node kept to rebuild the layout: parent id and the step taken, pos << 24 | code
+/// (codes stay far below 2^24: a few per placement anchored at one cell).
 #[derive(Clone, Copy)]
 struct ArenaNode {
     parent: u32,
-    pos: u8,
-    code: u32,
+    step: u32,
 }
+
+const IDX_BITS: u32 = 32 - SHARD_BITS;
+/// Compact the arenas once they hold this many times the nodes kept by the last compaction.
+const ARENA_GROWTH: usize = 2;
+const ARENA_MIN_COMPACT: usize = 1 << 20;
 
 /// Pareto front of one key. Most fronts hold a single entry; keeping it inline avoids a heap
 /// allocation per key, and the WASM allocator is a global lock that would serialize the threads.
@@ -263,7 +271,7 @@ fn run_round(
             ..Default::default()
         })
         .collect();
-    let root = Sweep::pos_of(&sweep.root_key);
+    let root = pos_of(&sweep.root_key);
     shards[shard_of(&sweep.root_key)].insert(
         ctx,
         &ChildRec {
@@ -283,9 +291,10 @@ fn run_round(
         true,
     );
 
+    let mut arena_kept = 1;
     for pos in 0..sweep.n {
         let t0 = now();
-        let fronts: Vec<(Key, Front, u32)> = shards
+        let mut fronts: Vec<(Key, Front, u32)> = shards
             .iter_mut()
             .enumerate()
             .flat_map(|(s, sh)| {
@@ -295,9 +304,13 @@ fn run_round(
             })
             .collect();
         ph[0] += now() - t0;
-        for batch in fronts.chunks(FRONTS_PER_BATCH) {
+        for range in batches(&fronts) {
             let t1 = now();
-            let children = expand_batch(ctx, tracked, pos, batch);
+            let children = expand_batch(ctx, tracked, pos, &fronts[range.clone()]);
+            // expanded: free its entries now, the children being inserted can reuse the memory
+            for f in &mut fronts[range] {
+                f.1 = Front::new();
+            }
             let t2 = now();
             ph[1] += t2 - t1;
             shards.par_iter_mut().enumerate().for_each(|(s, sh)| {
@@ -312,6 +325,10 @@ fn run_round(
             if over_memory_budget() {
                 return Err(OUT_OF_MEMORY.to_string());
             }
+        }
+        let arena: usize = shards.iter().map(|sh| sh.arena.len()).sum();
+        if arena >= ARENA_MIN_COMPACT && arena >= ARENA_GROWTH * arena_kept {
+            arena_kept = compact_arenas(&mut shards, pos + 1);
         }
         on_layer(pos);
     }
@@ -345,6 +362,23 @@ fn run_round(
     Ok(Some((best, pick.unwrap(), nodes, ph)))
 }
 
+/// Splits a layer's fronts into consecutive runs of about ENTRIES_PER_BATCH entries.
+fn batches(fronts: &[(Key, Front, u32)]) -> Vec<std::ops::Range<usize>> {
+    let mut out = Vec::new();
+    let mut start = 0;
+    while start < fronts.len() {
+        let mut end = start;
+        let mut entries = 0;
+        while end < fronts.len() && (end == start || entries < ENTRIES_PER_BATCH) {
+            entries += fronts[end].1.len();
+            end += 1;
+        }
+        out.push(start..end);
+        start = end;
+    }
+    out
+}
+
 /// Expands a batch of fronts in parallel, in a few contiguous chunks per thread. Children are
 /// indexed by destination shard as they are produced, so no sequential pass is needed.
 fn expand_batch(
@@ -375,7 +409,7 @@ fn expand_batch(
                         push(
                             &mut out.children,
                             ChildRec {
-                                layer: Sweep::pos_of(&c.key),
+                                layer: pos_of(&c.key),
                                 entry: Entry {
                                     id: 0,
                                     acc,
@@ -454,8 +488,7 @@ impl Shard {
         e.id = self.arena.len() as u32;
         self.arena.push(ArenaNode {
             parent: if root { NO_PARENT } else { rec.parent },
-            pos: rec.step_pos,
-            code: rec.code,
+            step: (rec.step_pos as u32) << 24 | rec.code,
         });
         front.insert(at, e);
         self.inserted += 1;
@@ -494,6 +527,81 @@ fn dominates(ctx: &Ctx, a: &Entry, b: &Entry) -> bool {
     true
 }
 
+/// Drops the search nodes no live entry (layers from `live_from` on) descends from: most nodes
+/// belong to entries dominated long ago, and the arena would otherwise outgrow the fronts. Nodes
+/// keep their order, so they move only down and parents can be renumbered in place. Returns the
+/// nodes kept.
+fn compact_arenas(shards: &mut [Shard], live_from: usize) -> usize {
+    let index = |id: u32| (id & ((1 << IDX_BITS) - 1)) as usize;
+    let shard = |id: u32| (id >> IDX_BITS) as usize;
+    // mark every ancestor of a live entry (a walk stops at the first node already marked)
+    let mut marks: Vec<Vec<u64>> = shards
+        .iter()
+        .map(|sh| vec![0; sh.arena.len().div_ceil(64)])
+        .collect();
+    for (s, sh) in shards.iter().enumerate() {
+        for e in sh.layers[live_from..]
+            .iter()
+            .flat_map(|l| l.values().flatten())
+        {
+            let mut id = (s as u32) << IDX_BITS | e.id;
+            loop {
+                let (ps, i) = (shard(id), index(id));
+                let word = &mut marks[ps][i / 64];
+                if *word & 1 << (i % 64) != 0 {
+                    break;
+                }
+                *word |= 1 << (i % 64);
+                id = shards[ps].arena[i].parent;
+                if id == NO_PARENT {
+                    break;
+                }
+            }
+        }
+    }
+    // new index = marked nodes before it: per-word prefix counts plus a popcount
+    let ranks: Vec<Vec<u32>> = marks
+        .iter()
+        .map(|m| {
+            let mut acc = 0;
+            m.iter()
+                .map(|w| {
+                    let r = acc;
+                    acc += w.count_ones();
+                    r
+                })
+                .collect()
+        })
+        .collect();
+    let renumber = |id: u32| -> u32 {
+        let (s, i) = (shard(id), index(id));
+        let below = marks[s][i / 64] & ((1u64 << (i % 64)) - 1);
+        (s as u32) << IDX_BITS | (ranks[s][i / 64] + below.count_ones())
+    };
+    shards.par_iter_mut().enumerate().for_each(|(s, sh)| {
+        let mut kept = 0;
+        for i in 0..sh.arena.len() {
+            if marks[s][i / 64] & 1 << (i % 64) == 0 {
+                continue;
+            }
+            let mut node = sh.arena[i];
+            if node.parent != NO_PARENT {
+                node.parent = renumber(node.parent);
+            }
+            sh.arena[kept] = node;
+            kept += 1;
+        }
+        sh.arena.truncate(kept);
+        sh.arena.shrink_to_fit();
+        for layer in &mut sh.layers[live_from..] {
+            for e in layer.values_mut().flatten() {
+                e.id = index(renumber((s as u32) << IDX_BITS | e.id)) as u32;
+            }
+        }
+    });
+    shards.iter().map(|sh| sh.arena.len()).sum()
+}
+
 fn path_of(shards: &[Shard], mut id: u32) -> Vec<(usize, u32)> {
     let mut path = Vec::new();
     loop {
@@ -502,7 +610,7 @@ fn path_of(shards: &[Shard], mut id: u32) -> Vec<(usize, u32)> {
         if node.parent == NO_PARENT {
             break;
         }
-        path.push((node.pos as usize, node.code));
+        path.push(((node.step >> 24) as usize, node.step & 0xFF_FFFF));
         id = node.parent;
     }
     path.reverse();
@@ -535,7 +643,11 @@ fn over_used(sweep: &Sweep, path: &[(usize, u32)]) -> u64 {
         .fold(0, |m, (c, _)| m | c.mask)
 }
 
-fn to_layout(sweep: &Sweep, path: &[(usize, u32)], item_count: usize) -> Layout {
+pub(crate) fn to_layout<B: Bits>(
+    sweep: &Sweep<B>,
+    path: &[(usize, u32)],
+    item_count: usize,
+) -> Layout {
     let mut item_cells = vec![None; item_count];
     let mut next_member = vec![0usize; sweep.classes.len()];
     let mut dominoes = Vec::new();

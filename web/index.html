@@ -110,6 +110,9 @@
   .cell .tag.info i { font-style: normal; opacity: .8; margin-right: 2px; }
   .breakdown .bonus small { display: block; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
   .solve-bar { display: flex; align-items: center; gap: 16px; margin-top: 20px; flex-wrap: wrap; }
+  .fast-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; }
+  .fast-toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .fast-toggle small { color: var(--ink-soft); }
   .status { font: 13px var(--font-mono); color: var(--ink-soft); }
   .status.ok { color: var(--ok); font-weight: 700; }
   .status.err { color: var(--accent); font-weight: 700; }
@@ -119,6 +122,7 @@
   .total .num { font: 700 56px/1 var(--font-display); }
   .total .lbl { font-size: 13px; color: var(--ink-soft); }
   .total .proof { margin-left: auto; font: 600 12px var(--font-mono); color: var(--ok); border: 1.5px solid var(--ok); padding: 3px 8px; border-radius: 999px; }
+  .total .proof.approx { color: #9a6200; border-color: #c98a1a; } /* amber: a good layout, not a proven one */
 
   table { width: 100%; border-collapse: collapse; }
   .breakdown { margin-top: 14px; font-size: 13px; }
@@ -310,6 +314,7 @@
     <div class="goal" id="goal" role="group" aria-label="求解目标"></div>
     <div class="solve-bar">
       <button class="btn primary" id="solveBtn" type="button">求最优解</button>
+      <label class="fast-toggle"><input type="checkbox" id="fastMode"> 快速模式 <small>近似解，几秒出结果</small></label>
       <span class="status" id="status" role="status"></span>
     </div>
     <div class="total" id="total" hidden></div>
@@ -356,7 +361,8 @@
 
 <script type="module">
 const STORE = "knapsack-ui-v1";
-const MAX_SIDE = 12, MAX_ITEMS = 63;
+const MAX_SIDE = 12, MAX_QTY = 255;
+const MAX_ITEMS = 5000; // the solver drops items that can't matter; exact mode then takes 63, fast mode 255
 const COLORS = { U: "#2f6690", F: "#c8553d", L: "#4f7d4e", T: "#7b4b94", O: "#b8860b", V: "#2f8582", I: "#a23b72" };
 const CUSTOM_COLORS = ["#5c6b73", "#8a6d3b", "#3d5a80", "#9c4f2e", "#4a7c59", "#6d4c7d"];
 const BORDERS = [["", "无"], ["top", "上"], ["bottom", "下"], ["left", "左"], ["right", "右"]];
@@ -462,6 +468,7 @@ function upgrade(s) {
     delete it.value;
   }
   s.goal ??= ["max", "skip", "skip"];
+  s.fast ??= true; // fast mode by default: seconds instead of minutes
   return s;
 }
 function corners(w, h) {
@@ -752,7 +759,7 @@ function renderRows() {
       el("td", { "data-label": "边界" }, borderSel),
       el("td", { class: "check", "data-label": "邻接", style: "text-align:center" }, el("input", { type: "checkbox", checked: it.adj, "aria-label": "邻接奖励", onchange: set("adj") })),
       el("td", { class: "check", "data-label": "必选", style: "text-align:center" }, el("input", { type: "checkbox", checked: it.required, "aria-label": "必选", onchange: set("required") })),
-      el("td", { "data-label": "数量" }, el("input", { type: "number", min: 1, max: MAX_ITEMS, step: 1, value: it.qty, "aria-label": "数量", onchange: set("qty", (v) => Math.max(1, toInt(v))) })),
+      el("td", { "data-label": "数量" }, el("input", { type: "number", min: 1, max: MAX_QTY, step: 1, value: it.qty, "aria-label": "数量", onchange: set("qty", (v) => Math.max(1, toInt(v))) })),
       el("td", {}, el("button", { class: "del", type: "button", "aria-label": "删除", onclick: () => { state.items.splice(r, 1); invalidate(); } }, "×")));
   });
   $("#rows").replaceChildren(...rows);
@@ -797,9 +804,18 @@ function renderGoal() {
 function goalNotes(goal) {
   const notes = [];
   if (maxAttr(goal) < 0) notes.push("未设求最大：在满足达标条件的前提下，让占用的格子最少（特殊矩形也算占用）。");
-  if (goal.some((g) => typeof g === "number")) {
+  const targets = goal.filter((g) => typeof g === "number").length;
+  if (state.fast) {
+    notes.push("快速模式：几秒内给出近似解，不保证最优；关闭后求精确最优解。");
+    return notes.map((t) => el("p", { class: "goal-note" }, t));
+  }
+  if (targets >= 2) {
+    notes.push("同时设了多个达标条件：计算量会成倍增加，常常超出浏览器内存。建议先只保留一个达标条件（其余跳过），或打开快速模式。");
+  } else if (targets === 1) {
     notes.push("达标条件较紧时可能需要较长时间（几分钟以上），可以随时取消，或适当调低目标。");
   }
+  const negative = ATTRS.some(([, , field], a) => goal[a] !== "skip" && state.items.some((it) => it[field] < 0));
+  if (negative && targets > 0) notes.push("参与计算的属性里有负值，求解会明显变慢。");
   return notes.map((t) => el("p", { class: "goal-note" }, t));
 }
 
@@ -810,6 +826,12 @@ function renderResult() {
   if (!result) { $("#breakdown").replaceChildren(); return; }
   if (!result.feasible) {
     const inf = result.infeasible;
+    if (inf.notFound) {
+      total.replaceChildren(el("div", { class: "infeasible" },
+        "快速模式没有找到满足所有条件的方案（不代表一定无解）。可以调低目标，或关闭快速模式求精确解。"));
+      $("#breakdown").replaceChildren();
+      return;
+    }
     const reasons = inf.requiredImpossible
       ? [el("li", {}, "必选物品无法同时放进棋盘")]
       : inf.targetBest.map((t) => el("li", {}, `${ATTRS[t.attr][1]}目标 ≥ ${t.target}，单独最多只能到 ${t.best}`));
@@ -833,7 +855,9 @@ function renderResult() {
         el("span", { class: "lbl" }, ATTRS[a][1] + (a === main ? " · 最大" : "")),
         typeof g === "number" ? el("span", { class: "met" }, `✓ ≥ ${g}`) : null);
     })),
-    el("span", { class: "proof" }, `已证明最优 · ${result.seconds.toFixed(1)}s · ${result.rounds} 轮`));
+    el("span", { class: "proof" + (result.approximate ? " approx" : "") }, result.approximate
+      ? `近似解 · 未证明最优 · ${result.seconds.toFixed(1)}s` + (result.itemsConsidered < result.itemsGiven ? ` · 考虑了 ${result.itemsConsidered} 件` : "")
+      : `已证明最优 · ${result.seconds.toFixed(1)}s · ${result.rounds} 轮`));
   const cell = (a, v, base) => el("td", { class: "num" + (goal[a] === "skip" ? " skip" : "") },
     String(v), base != null && base !== v ? el("span", { class: "base" }, `(${base})`) : null);
   const bonusCell = (b) => el("td", { class: "num bonus" }, b.pct ? `+${b.pct}%` : "—", b.text ? el("small", {}, b.text) : null);
@@ -856,6 +880,8 @@ function renderResult() {
 function render() {
   $("#w").value = state.width;
   $("#h").value = state.height;
+  $("#fastMode").checked = state.fast;
+  if (!solving) $("#solveBtn").textContent = solveLabel();
   renderBoard();
   renderGoal();
   renderRows();
@@ -880,7 +906,9 @@ function buildRequest() {
     }
   });
   const goal = Object.fromEntries(ATTRS.map(([name], a) => [name, state.goal[a]]));
-  return { request: { width: state.width, height: state.height, blocked: state.blocked, goal, items }, rows };
+  const request = { width: state.width, height: state.height, blocked: state.blocked, goal, items };
+  request.mode = state.fast ? "fast" : "exact";
+  return { request, rows };
 }
 
 function setStatus(text, kind = "") {
@@ -906,6 +934,8 @@ function stopEngine() {
   engine = null;
 }
 
+const solveLabel = () => (state.fast ? "快速求解" : "求最优解");
+
 function solve() {
   if (solving) return cancelSolve();
   const { request, rows } = buildRequest();
@@ -920,7 +950,7 @@ function solve() {
   const hasTargets = state.goal.some((g) => typeof g === "number");
   const tick = () => {
     const secs = (performance.now() - t0) / 1000;
-    const hint = hasTargets && secs > 15 ? " · 条件较紧，可以取消后调低目标" : "";
+    const hint = !state.fast && hasTargets && secs > 15 ? " · 条件较紧，可以取消后改用快速模式" : "";
     setStatus(`求解中… ${secs.toFixed(0)}s ${progress}${hint}`);
   };
   const timer = setInterval(tick, 250);
@@ -929,7 +959,7 @@ function solve() {
     clearInterval(timer);
     solving = false;
     if (!keepEngine) stopEngine();
-    btn.textContent = "求最优解";
+    btn.textContent = solveLabel();
     btn.classList.remove("cancel");
     setStatus(text, kind);
     if (!engine) startEngine(); // warm a fresh one for next time
@@ -942,9 +972,11 @@ function solve() {
     } else if (data.type === "done") {
       result = data.result;
       result.seconds = (performance.now() - t0) / 1000; // what the user waited, startup included
+      result.itemsGiven = request.items.length;
       resultRows = rows;
       resultGoal = [...state.goal];
-      finish(result.feasible ? "完成" : "无法达标", result.feasible ? "ok" : "err", data.memoryBytes < ENGINE_MEMORY_LIMIT);
+      const failed = result.infeasible?.notFound ? "未找到" : "无法达标";
+      finish(result.feasible ? "完成" : failed, result.feasible ? "ok" : "err", data.memoryBytes < ENGINE_MEMORY_LIMIT);
       render();
     } else {
       finish("出错：" + data.message, "err", false);
@@ -981,7 +1013,7 @@ function importJson(text) {
   });
   const goal = ATTRS.map(([name], a) => p.goal?.[name] ?? (a === 0 ? "max" : "skip"));
   if (goal.filter((g) => g === "max").length > 1) throw new Error("goal 里最多只能有一个属性是 \"max\"");
-  state = { width: p.width, height: p.height, blocked: p.blocked || [], items, goal };
+  state = { width: p.width, height: p.height, blocked: p.blocked || [], items, goal, fast: p.mode !== "exact" };
   renderPalette();
   invalidate();
 }
@@ -1004,6 +1036,7 @@ async function init() {
   $("#w").addEventListener("change", (e) => setDim("width", e.target));
   $("#h").addEventListener("change", (e) => setDim("height", e.target));
   $("#solveBtn").addEventListener("click", solve);
+  $("#fastMode").addEventListener("change", (e) => { state.fast = e.target.checked; save(); render(); });
   $("#clearBtn").addEventListener("click", () => {
     if (!confirm(`清空全部 ${state.items.length} 种物品？（预设组不受影响）`)) return;
     state.items = [];

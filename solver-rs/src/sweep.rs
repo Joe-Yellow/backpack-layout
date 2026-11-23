@@ -17,6 +17,7 @@
 //! value is negative, trunc is floor and only S mod 5 affects the future, so that is all a piece
 //! keeps there (more states then compare equal).
 
+use crate::bits::Bits;
 use crate::geometry::{neighbours, placements, shape_key};
 use crate::problem::Problem;
 use smallvec::SmallVec;
@@ -39,12 +40,16 @@ pub const STEP_PIECE_ACROSS: u32 = 2; // cells pos, pos + lane
 pub const STEP_ANCHORED: u32 = 3; // + index into the anchored placements at pos
 
 /// Open entity. Item: tag = vclass << 8 | m (sums unused). 1x2 piece: tag = PIECE, sums = summed
-/// bases of the adjacent items per slot.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// bases of the adjacent items per attribute slot (see Sweep::sum_slot).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Ent {
     pub tag: u32,
-    pub sums: [i32; SLOTS],
+    pub sums: [i32; SUM_SLOTS],
 }
+
+/// At most three slots hold attributes: slot 0 counts empty cells when nothing is maximized,
+/// otherwise at most two targets follow the maximized slot. Pieces keep sums for those only.
+const SUM_SLOTS: usize = 3;
 
 pub const PIECE: u32 = u32::MAX;
 
@@ -63,7 +68,7 @@ impl Ent {
 // Inline capacities fit the common case (keys are ~20-30 bytes, a handful of open entities);
 // longer ones spill to the heap. Sized for memory: fronts dominate the footprint.
 pub type Key = SmallVec<[u8; 32]>;
-pub type Ents = SmallVec<[Ent; 6]>;
+pub type Ents = SmallVec<[Ent; 5]>;
 pub type Score = [i32; SLOTS];
 
 /// Distinct (slot values, adjacency flag) of the items: all an open item needs for the future.
@@ -76,10 +81,10 @@ pub struct ValueClass {
     pub any_neg: bool,
 }
 
-pub struct ItemClass {
+pub struct ItemClass<B> {
     pub vclass: usize,
     pub members: Vec<usize>,
-    pub mask: u64,
+    pub mask: B,
 }
 
 struct Anchored {
@@ -89,10 +94,10 @@ struct Anchored {
 }
 
 /// A successor state plus the reward collected by the step and the step code.
-pub struct Child {
+pub struct Child<B = u64> {
     pub key: Key,
     pub ents: Ents,
-    pub used: u64,
+    pub used: B,
     pub gain: Score,
     pub code: u32,
 }
@@ -103,12 +108,13 @@ pub struct Scratch {
     work: Vec<i8>,
 }
 
-pub struct Sweep {
+/// `B` holds item bits: u64 for the exact solver, a wider set for the beam search.
+pub struct Sweep<B = u64> {
     pub n: usize,
-    pub classes: Vec<ItemClass>,
+    pub classes: Vec<ItemClass<B>>,
     pub vclasses: Vec<ValueClass>,
     /// Item bits that must be placed.
-    pub required: u64,
+    pub required: B,
     pub root_key: Key,
     lane: usize,
     /// Cells at or beyond pos + reach can't be covered yet: they are UNDEC or BLOCKED.
@@ -133,17 +139,21 @@ pub struct Sweep {
     /// Upper bound on the pieces one item can still become adjacent to.
     max_adjacency: i32,
     /// Per slot: items with a negative value there.
-    neg_items: [u64; SLOTS],
+    neg_items: [B; SLOTS],
     /// Per item bit: the most placing it can lower each slot, its later adjacencies included.
     item_loss: Vec<Score>,
     /// Per value class: the most an already placed item can still lower each slot.
     open_loss: Vec<Score>,
 }
 
-impl Sweep {
+impl<B: Bits> Sweep<B> {
     /// `slots` lists the attribute of each slot (maximized first, then targets); a None first
     /// slot counts empty cells instead.
-    pub fn new(p: &Problem, slots: &[Option<usize>]) -> Sweep {
+    pub fn new(p: &Problem, slots: &[Option<usize>]) -> Sweep<B> {
+        assert!(
+            p.items.len() <= B::CAPACITY,
+            "too many items for this item set"
+        );
         let (w, h) = (p.width as usize, p.height as usize);
         let n = w * h;
         let along_y = h <= w;
@@ -215,7 +225,7 @@ impl Sweep {
                 });
                 vclasses.len() - 1
             });
-            let mask = members.iter().fold(0u64, |m, &i| m | 1 << i);
+            let mask = members.iter().fold(B::default(), |m, &i| m | B::bit(i));
             // distinct adjacent pieces each cover one of the shape's neighbour cells
             let k = neighbour_cells(&rep.shape) as i32;
             if open_k.len() <= vclass {
@@ -272,7 +282,7 @@ impl Sweep {
             .iter()
             .enumerate()
             .filter(|(_, it)| it.required)
-            .fold(0u64, |m, (i, _)| m | 1 << i);
+            .fold(B::default(), |m, (i, _)| m | B::bit(i));
         let area = p.items.iter().map(|it| it.shape.len() as u32).collect();
         let empty_reward = slots.first() == Some(&None);
         let pair_rule = !empty_reward && vclasses.iter().all(|vc| !vc.any_neg);
@@ -282,7 +292,7 @@ impl Sweep {
         let neg_items = std::array::from_fn(|j| {
             (0..p.items.len())
                 .filter(|&i| slot_vals(i)[j] < 0)
-                .fold(0u64, |m, i| m | 1 << i)
+                .fold(B::default(), |m, i| m | B::bit(i))
         });
         let open_loss = vclasses
             .iter()
@@ -332,10 +342,22 @@ impl Sweep {
             };
         }
         sweep.root_key = sweep
-            .finish(0, Ents::new(), 0, [0; SLOTS], STEP_EMPTY, &mut sc)
+            .finish(
+                0,
+                Ents::new(),
+                B::default(),
+                [0; SLOTS],
+                STEP_EMPTY,
+                &mut sc,
+            )
             .0
             .key;
         sweep
+    }
+
+    /// Average number of item placements anchored at a cell: the branching of one step.
+    pub fn placements_per_cell(&self) -> usize {
+        self.by_anchor.iter().map(Vec::len).sum::<usize>() / self.n
     }
 
     pub fn scratch(&self) -> Scratch {
@@ -343,10 +365,6 @@ impl Sweep {
             base: vec![0; self.n],
             work: vec![0; self.n],
         }
-    }
-
-    pub fn pos_of(key: &[u8]) -> usize {
-        key[0] as usize
     }
 
     pub fn cell_of_scan(&self, s: usize) -> usize {
@@ -373,10 +391,10 @@ impl Sweep {
         &self,
         key: &[u8],
         ents: &[Ent],
-        used: u64,
-        tracked: u64,
+        used: B,
+        tracked: B,
         sc: &mut Scratch,
-        emit: &mut impl FnMut(Child),
+        emit: &mut impl FnMut(Child<B>),
     ) {
         let pos = self.decode(key, sc);
         let (lane, n) = (self.lane, self.n);
@@ -386,7 +404,7 @@ impl Sweep {
         let can_empty = !self.pair_rule || (!up_empty && !left_empty);
         let along = pos % lane + 1 < lane && base[pos + 1] == UNDEC;
         let across = pos + lane < n && base[pos + lane] == UNDEC;
-        let mut out = |(child, free): (Child, u32)| {
+        let mut out = |(child, free): (Child<B>, u32)| {
             if self.required_area(child.used) <= free {
                 emit(child);
             }
@@ -426,7 +444,7 @@ impl Sweep {
         }
         for (k, a) in self.by_anchor[pos].iter().enumerate() {
             let limited = self.classes[a.cls].mask & tracked;
-            if limited != 0 && limited & !used == 0 {
+            if !limited.is_zero() && (limited & !used).is_zero() {
                 continue;
             }
             if a.cells.iter().all(|&c| sc.base[c] == UNDEC) {
@@ -449,16 +467,14 @@ impl Sweep {
     /// The most slot j can still drop from this state, or None if unbounded (a negative class that
     /// isn't tracked may be placed any number of times). Only negative values ever lower a slot:
     /// unplaced negative items, and the bonuses and pieces of placed ones still open.
-    pub fn future_loss(&self, j: usize, ents: &[Ent], used: u64, tracked: u64) -> Option<i64> {
+    pub fn future_loss(&self, j: usize, ents: &[Ent], used: B, tracked: B) -> Option<i64> {
         let neg = self.neg_items[j];
-        if neg & !tracked != 0 {
+        if !(neg & !tracked).is_zero() {
             return None;
         }
         let mut loss = 0i64;
-        let mut todo = neg & !used;
-        while todo != 0 {
-            loss += self.item_loss[todo.trailing_zeros() as usize][j] as i64;
-            todo &= todo - 1;
+        for i in (neg & !used).ones() {
+            loss += self.item_loss[i][j] as i64;
         }
         for e in ents.iter().filter(|e| !e.is_piece()) {
             loss += self.open_loss[e.vclass()][j] as i64;
@@ -466,15 +482,15 @@ impl Sweep {
         Some(loss)
     }
 
+    /// Where a piece keeps its sum for slot j; None: no item has a value there.
+    fn sum_slot(&self, j: usize) -> Option<usize> {
+        let k = j.checked_sub(usize::from(self.empty_reward))?;
+        (k < SUM_SLOTS).then_some(k)
+    }
+
     /// Cells still needed by required items not placed yet.
-    fn required_area(&self, used: u64) -> u32 {
-        let mut missing = self.required & !used;
-        let mut total = 0;
-        while missing != 0 {
-            total += self.area[missing.trailing_zeros() as usize];
-            missing &= missing - 1;
-        }
-        total
+    pub fn required_area(&self, used: B) -> u32 {
+        (self.required & !used).ones().map(|i| self.area[i]).sum()
     }
 
     /// Fills sc.base with the cells encoded in key; cells before the window become OCCUPIED.
@@ -498,14 +514,14 @@ impl Sweep {
         &self,
         pos: usize,
         ents_in: &[Ent],
-        mut used: u64,
+        mut used: B,
         cls: i32,
         cells: Option<&[usize]>,
         touch: bool,
-        tracked: u64,
+        tracked: B,
         code: u32,
         sc: &mut Scratch,
-    ) -> (Child, u32) {
+    ) -> (Child<B>, u32) {
         sc.work.copy_from_slice(&sc.base);
         let owner = &mut sc.work;
         let mut ents: Ents = Ents::from_slice(ents_in);
@@ -524,7 +540,7 @@ impl Sweep {
                 let mut me = if me_is_piece {
                     Ent {
                         tag: PIECE,
-                        sums: [0; SLOTS],
+                        sums: [0; SUM_SLOTS],
                     }
                 } else {
                     let ic = &self.classes[cls as usize];
@@ -535,10 +551,10 @@ impl Sweep {
                         gain[j] += v + v * m / 10;
                     }
                     let free = ic.mask & tracked & !used;
-                    used |= free.isolate_lowest_one(); // lowest free tracked member
+                    used |= free.lowest(); // lowest free tracked member
                     Ent {
                         tag: (ic.vclass as u32) << 8 | if vc.adj_bonus { m as u32 } else { 0 },
-                        sums: [0; SLOTS],
+                        sums: [0; SUM_SLOTS],
                     }
                 };
                 ents.push(me);
@@ -562,9 +578,10 @@ impl Sweep {
                         };
                         let vc = &self.vclasses[item.vclass()];
                         for j in 0..SLOTS {
-                            let (old, new) = (piece.sums[j], piece.sums[j] + vc.vals[j]);
+                            let Some(k) = self.sum_slot(j) else { continue };
+                            let (old, new) = (piece.sums[k], piece.sums[k] + vc.vals[j]);
                             gain[j] += new / 5 - old / 5;
-                            piece.sums[j] = if self.nonneg[j] { new % 5 } else { new };
+                            piece.sums[k] = if self.nonneg[j] { new % 5 } else { new };
                         }
                         if vc.adj_bonus {
                             assert!(item.mult() < 0xFF, "too many adjacent pieces");
@@ -589,10 +606,13 @@ impl Sweep {
         if a.is_piece() {
             // future gain trunc((S + X) / 5) - trunc(S / 5): only the remainder matters where
             // nothing is negative (floor); otherwise see piece_penalty
-            return Some(std::array::from_fn(|j| match (a.sums[j], b.sums[j]) {
-                (x, y) if x == y => 0,
-                (x, y) if self.nonneg[j] => i32::from(x < y),
-                (x, y) => piece_penalty(x, y),
+            return Some(std::array::from_fn(|j| match self.sum_slot(j) {
+                None => 0,
+                Some(k) => match (a.sums[k], b.sums[k]) {
+                    (x, y) if x == y => 0,
+                    (x, y) if self.nonneg[j] => i32::from(x < y),
+                    (x, y) => piece_penalty(x, y),
+                },
             }));
         }
         let (va, vb) = (&self.vclasses[a.vclass()], &self.vclasses[b.vclass()]);
@@ -640,11 +660,11 @@ impl Sweep {
         &self,
         from: usize,
         ents: Ents,
-        used: u64,
+        used: B,
         gain: Score,
         code: u32,
         sc: &mut Scratch,
-    ) -> (Child, u32) {
+    ) -> (Child<B>, u32) {
         assert!(
             ents.len() <= MAX_OPEN,
             "too many open entities: board too large for this solver"
@@ -707,6 +727,11 @@ impl Sweep {
             free,
         )
     }
+}
+
+/// The undecided cell a key's state is at: its layer.
+pub fn pos_of(key: &[u8]) -> usize {
+    key[0] as usize
 }
 
 /// Cells outside the shape that touch it.

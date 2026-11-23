@@ -368,3 +368,138 @@ fn dfs(
     }
     best
 }
+
+/// Objective the JSON solver reports: the maximized total, or empty cells.
+fn reported_value(p: &Problem, out: &backpack_solver::SolutionOut) -> i64 {
+    p.goal.maximize.map_or(out.empty_cells, |a| out.totals[a])
+}
+
+/// Many items over few shapes, so plenty of them are dominated.
+fn crowded_instance(rng: &mut Rng) -> String {
+    let base = random_instance(rng, true);
+    let mut v: serde_json::Value = serde_json::from_str(&base).unwrap();
+    let shapes: Vec<serde_json::Value> = (0..1 + rng.below(2))
+        .map(|_| {
+            let size = 2 + rng.below(2) as usize;
+            serde_json::from_str(&random_polyomino(rng, size)).unwrap()
+        })
+        .collect();
+    let items = (0..3 + rng.below(4))
+        .map(|i| {
+            let attr = |rng: &mut Rng| rng.range(-10, 30);
+            serde_json::json!({
+                "name": format!("C{i}"),
+                "shape": shapes[rng.below(shapes.len() as u64) as usize],
+                "performance": attr(rng), "quality": attr(rng), "efficiency": attr(rng),
+                "adjBonus": rng.below(3) == 0,
+                "required": rng.below(8) == 0,
+            })
+        })
+        .collect::<Vec<_>>();
+    v["items"] = items.into();
+    // small boards keep brute force fast; at most 3x3 also means few copies fit
+    v["width"] = (2 + rng.below(2)).into();
+    v["height"] = (2 + rng.below(2)).into();
+    v["blocked"] = serde_json::json!([]);
+    v.to_string()
+}
+
+#[test]
+fn dropping_dominated_items_keeps_the_optimum() {
+    let mut rng = Rng(0x1234_5678_9ABC_DEF1);
+    let mut dropped = 0;
+    for t in 0..200 {
+        let json = crowded_instance(&mut rng);
+        let p = parse(&json);
+        let (reduced, _) = backpack_solver::reduce::reduce(&p, usize::MAX);
+        dropped += p.items.len() - reduced.items.len();
+        assert_eq!(
+            brute_force(&reduced),
+            brute_force(&p),
+            "instance {t}: {json}"
+        );
+    }
+    assert!(
+        dropped > 100,
+        "the test should exercise the reduction (dropped {dropped})"
+    );
+}
+
+#[test]
+fn fast_mode_finds_valid_layouts_close_to_the_optimum() {
+    let mut rng = Rng(0x0BAD_C0DE_1234_5678);
+    let (mut feasible, mut found, mut optimal) = (0, 0, 0);
+    for t in 0..300 {
+        let json = random_instance(&mut rng, true);
+        let p = parse(&json);
+        let best = brute_force(&p);
+        let fast = json.replacen('{', "{\"mode\":\"fast\",", 1);
+        // solve_json checks the layout with the verifier before returning it
+        let out = backpack_solver::solve_json(&fast, &mut |_, _, _| {}).expect("solves");
+        assert!(out.approximate);
+        if out.feasible {
+            let v = reported_value(&p, &out);
+            let best = best.unwrap_or_else(|| {
+                panic!("instance {t}: fast found a layout brute force didn't: {json}")
+            });
+            assert!(
+                v <= best,
+                "instance {t}: fast {v} beats the optimum {best}: {json}"
+            );
+            found += 1;
+            optimal += usize::from(v == best);
+        }
+        feasible += usize::from(best.is_some());
+    }
+    assert_eq!(found, feasible, "fast mode missed feasible instances");
+    assert!(
+        optimal * 100 >= found * 95,
+        "fast mode optimal on only {optimal} of {found}"
+    );
+}
+
+#[test]
+fn fast_mode_takes_hundreds_of_items() {
+    let mut rng = Rng(0x5EED_0000_0000_0001);
+    let types = ["U", "F", "L", "T", "O", "V", "I"];
+    let items: Vec<serde_json::Value> = (0..400)
+        .map(|i| {
+            serde_json::json!({
+                "name": format!("N{i}"),
+                "type": types[rng.below(7) as usize],
+                "performance": rng.range(0, 60), "quality": rng.range(-20, 40),
+                "efficiency": rng.range(-20, 20), "adjBonus": rng.below(3) == 0,
+                "required": i == 399,
+            })
+        })
+        .collect();
+    let mut v = serde_json::json!({
+        "width": 7, "height": 5, "items": items,
+        "goal": {"performance": "max", "quality": 60},
+    });
+    v["mode"] = "fast".into();
+    let out = backpack_solver::solve_json(&v.to_string(), &mut |_, _, _| {}).expect("solves");
+    assert!(out.feasible && out.totals[1] >= 60);
+    assert!(out.items_considered <= problem::FAST_MAX_ITEMS);
+    assert!(
+        out.items.iter().any(|it| it.index == 399),
+        "the required item is placed"
+    );
+}
+
+#[test]
+fn exact_mode_points_to_fast_mode_when_too_many_items_matter() {
+    // performance falls as quality rises: no item dominates another, so none can be dropped
+    let items: Vec<serde_json::Value> = (0..70)
+        .map(|i| serde_json::json!({"name": format!("V{i}"), "type": "V", "performance": 100 - i, "quality": i}))
+        .collect();
+    let v = serde_json::json!({
+        "width": 7, "height": 5, "items": items,
+        "goal": {"performance": "max", "quality": 10},
+    });
+    let exact = backpack_solver::solve_json(&v.to_string(), &mut |_, _, _| {});
+    assert!(
+        matches!(&exact, Err(e) if e.contains("快速模式")),
+        "exact mode should point to fast mode"
+    );
+}
