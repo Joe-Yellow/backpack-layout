@@ -100,6 +100,8 @@ pub struct Child<B = u64> {
     pub used: B,
     pub gain: Score,
     pub code: u32,
+    /// Undecided free cells left.
+    pub free: u32,
 }
 
 /// Per-thread scratch buffers.
@@ -723,6 +725,7 @@ impl<B: Bits> Sweep<B> {
                 used,
                 gain,
                 code,
+                free,
             },
             free,
         )

@@ -503,3 +503,31 @@ fn exact_mode_points_to_fast_mode_when_too_many_items_matter() {
         "exact mode should point to fast mode"
     );
 }
+
+/// User report: on a 31-cell board quality can reach only 108, so quality >= 100 plus
+/// performance >= 120 is tight; the fast mode must still find a layout (one exists: 145/108).
+#[test]
+fn fast_mode_meets_tight_targets_on_a_cornered_board() {
+    let json = r#"{
+        "width": 7, "height": 5, "blocked": [[0,0],[6,0],[0,4],[6,4]],
+        "goal": {"performance": 120, "quality": 100, "efficiency": "max"}, "mode": "fast",
+        "items": [
+            {"name":"U1","type":"U","performance":54,"quality":16,"efficiency":0,"adjBonus":false},
+            {"name":"U2","type":"U","performance":32,"quality":18,"efficiency":-16,"adjBonus":false},
+            {"name":"F3","type":"F","performance":32,"quality":32,"efficiency":0,"adjBonus":false},
+            {"name":"F4","type":"F","performance":32,"quality":16,"efficiency":-16,"adjBonus":false},
+            {"name":"L5","type":"L","performance":32,"quality":0,"efficiency":12,"adjBonus":false},
+            {"name":"L6","type":"L","performance":0,"quality":16,"efficiency":12,"adjBonus":false},
+            {"name":"T7","type":"T","performance":16,"quality":0,"efficiency":12,"adjBonus":false},
+            {"name":"T8","type":"T","performance":0,"quality":8,"efficiency":12,"adjBonus":false},
+            {"name":"O9","type":"O","performance":16,"quality":0,"efficiency":12,"adjBonus":false},
+            {"name":"O10","type":"O","performance":0,"quality":8,"efficiency":12,"adjBonus":false},
+            {"name":"V11","type":"V","performance":14,"quality":0,"efficiency":8,"adjBonus":false},
+            {"name":"V12","type":"V","performance":0,"quality":6,"efficiency":8,"adjBonus":false},
+            {"name":"I13","type":"I","performance":0,"quality":-15,"efficiency":-15,"adjBonus":false,"required":true}
+        ]
+    }"#;
+    let out = backpack_solver::solve_json(json, &mut |_, _, _| {}).expect("solves");
+    assert!(out.feasible, "fast mode found no layout");
+    assert!(out.totals[0] >= 120 && out.totals[1] >= 100);
+}

@@ -5,10 +5,11 @@
 //! most once from the start (no relaxation rounds). Scores use the exact rules, so the layout found
 //! is scored exactly; it just isn't proven optimal and may miss layouts meeting tight targets.
 //!
-//! Promise of a state: the maximized total, plus progress towards each target (the total, capped
-//! at the target), minus unplaced required items. How hard to push towards the targets differs
-//! between instances, so with targets a few weights are tried and the best layout meeting every
-//! target wins.
+//! Promise of a state: the maximized total plus an optimistic outlook for the free cells left
+//! (see Outlook), plus weighted progress towards each target, capped at the target. Without the
+//! outlook, states that spent their best items early or put off a costly required item looked
+//! best and then ran out of room. With targets a couple of passes run (TARGET_PASSES) and the best
+//! layout meeting every target wins.
 
 use crate::bits::{Bits, Wide};
 use crate::exact::{to_layout, Solution};
@@ -22,10 +23,12 @@ use rustc_hash::FxHashMap;
 const WORK_PER_LAYER: usize = 250_000;
 const MIN_WIDTH: usize = 500;
 const MAX_WIDTH: usize = 5_000;
-/// Target lag weights tried when there are targets.
-const TARGET_WEIGHTS: [f64; 3] = [0.5, 2.0, 8.0];
-/// Unplaced required cells cost this many "items" each, times the decided share of the board.
-const REQUIRED_WEIGHT: f64 = 0.5;
+/// Passes run when there are targets: (weight of target progress, whether that progress includes
+/// the outlook). Counting only what is already reached pushes harder towards the targets and finds
+/// better totals; adding the outlook steers clear of dead ends when targets are tight (it found
+/// the only layouts on a 31-cell board where quality could reach 108 of 100). Two passes measured
+/// within ~2% of four on 10 instances at half the time.
+const TARGET_PASSES: [(f64, bool); 2] = [(1.0, false), (8.0, true)];
 /// States expanded per parallel batch: bounds the children held before pruning.
 const BATCH: usize = 1024;
 
@@ -34,6 +37,7 @@ struct Cand {
     ents: Ents,
     used: Wide,
     acc: Score,
+    free: u32,
     parent: u32,
     step: u32,
 }
@@ -60,23 +64,28 @@ pub fn solve(p: &Problem, on_progress: &mut dyn FnMut(u32, usize, usize)) -> Opt
         Some(None) => 4.0, // empty cells: about one item's area
         None => 1.0,
     });
-    let weights: &[f64] = if p.goal.targets.is_empty() {
-        &[0.0]
-    } else {
-        &TARGET_WEIGHTS
-    };
     let width = (WORK_PER_LAYER / sweep.placements_per_cell().max(1)).clamp(MIN_WIDTH, MAX_WIDTH);
+    let outlook = Outlook::new(p, &slots);
+    let passes: &[(f64, bool)] = if p.goal.targets.is_empty() {
+        &[(0.0, false)]
+    } else {
+        &TARGET_PASSES
+    };
     let mut best: Option<Solution> = None;
-    for (round, &w) in weights.iter().enumerate() {
-        let promise = |c: &Cand, pos: usize| {
-            let share = pos as f64 / sweep.n as f64;
-            let mut s = c.acc[0] as f64 / scale[0];
+    for (round, &(w, ahead_targets)) in passes.iter().enumerate() {
+        let promise = |c: &Cand, _pos: usize| {
+            let mut s = (c.acc[0] as f64 + outlook.rest(0, c.used, c.free)) / scale[0];
             for j in 1..SLOTS {
                 if let Some(t) = targets[j] {
-                    s += w * c.acc[j].min(t) as f64 / scale[j];
+                    let ahead = if ahead_targets {
+                        outlook.rest(j, c.used, c.free)
+                    } else {
+                        0.0
+                    };
+                    s += w * (c.acc[j] as f64 + ahead).min(t as f64) / scale[j];
                 }
             }
-            s - REQUIRED_WEIGHT * share * sweep.required_area(c.used) as f64 / 4.0
+            s
         };
         let found = run(&sweep, width, &promise, &targets, &mut |pos| {
             on_progress(round as u32 + 1, pos, sweep.n)
@@ -97,6 +106,75 @@ pub fn solve(p: &Problem, on_progress: &mut dyn FnMut(u32, usize, usize)) -> Opt
     best
 }
 
+/// Optimistic value of the rest of the layout, per slot: the free cells filled with the unused
+/// items of the best value per cell (the last one in part), unplaced required items first whatever
+/// their value. Bonuses and pieces are left out: it ranks states, it bounds nothing.
+struct Outlook {
+    /// Per slot: (item, value, cells) by value per cell, best first.
+    by_density: Vec<Vec<(usize, f64, f64)>>,
+    required: Vec<usize>,
+    vals: Vec<Score>,
+    area: Vec<f64>,
+    /// Slot 0 counts empty cells.
+    empty_goal: bool,
+}
+
+impl Outlook {
+    fn new(p: &Problem, slots: &[Option<usize>]) -> Outlook {
+        let vals: Vec<Score> = p
+            .items
+            .iter()
+            .map(|it| {
+                std::array::from_fn(|j| slots.get(j).copied().flatten().map_or(0, |a| it.attrs[a]))
+            })
+            .collect();
+        let area: Vec<f64> = p.items.iter().map(|it| it.shape.len() as f64).collect();
+        let by_density = (0..SLOTS)
+            .map(|j| {
+                let mut v: Vec<(usize, f64, f64)> = (0..p.items.len())
+                    .filter(|&i| !p.items[i].required && vals[i][j] > 0)
+                    .map(|i| (i, vals[i][j] as f64, area[i]))
+                    .collect();
+                v.sort_by(|a, b| (b.1 / b.2).total_cmp(&(a.1 / a.2)));
+                v
+            })
+            .collect();
+        Outlook {
+            by_density,
+            required: (0..p.items.len())
+                .filter(|&i| p.items[i].required)
+                .collect(),
+            vals,
+            area,
+            empty_goal: slots.first() == Some(&None),
+        }
+    }
+
+    fn rest(&self, j: usize, used: Wide, free: u32) -> f64 {
+        let mut cells = free as f64;
+        let mut value = 0.0;
+        for &i in &self.required {
+            if (used & Wide::bit(i)).is_zero() {
+                cells -= self.area[i];
+                value += self.vals[i][j] as f64;
+            }
+        }
+        if j == 0 && self.empty_goal {
+            return cells.max(0.0); // at best every other cell stays empty
+        }
+        for &(i, v, a) in &self.by_density[j] {
+            if cells <= 0.0 {
+                break;
+            }
+            if (used & Wide::bit(i)).is_zero() {
+                value += v * cells.min(a) / a;
+                cells -= a;
+            }
+        }
+        value
+    }
+}
+
 /// One beam pass: the best final total meeting the targets and its path of (pos, code) steps.
 fn run(
     sweep: &Sweep<Wide>,
@@ -113,6 +191,7 @@ fn run(
         ents: Ents::new(),
         used: Wide::default(),
         acc: [0; SLOTS],
+        free: sweep.n as u32, // only feeds the outlook, which the root never needs
         parent: u32::MAX,
         step: u32::MAX,
     });
@@ -136,6 +215,7 @@ fn run(
                         sweep.expand(&c.key, &c.ents, c.used, all, sc, &mut |ch| {
                             out.push(Cand {
                                 acc: std::array::from_fn(|j| c.acc[j] + ch.gain[j]),
+                                free: ch.free,
                                 key: ch.key,
                                 ents: ch.ents,
                                 used: ch.used,
