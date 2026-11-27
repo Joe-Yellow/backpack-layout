@@ -60,6 +60,27 @@ fn border_bonus_merges_with_adjacency_bonus() {
 }
 
 #[test]
+fn each_touched_border_side_adds_its_own_bonus() {
+    // 2x2 board, one 1x1 item worth 10: the top-left cell touches both top and left.
+    let solve = |border: &str| {
+        solve_value(&parse(&format!(
+            r#"{{"width":2,"height":2,"blocked":[[1,0],[0,1],[1,1]],"items":[
+            {{"name":"A","value":10,"shape":[[0,0]],"border":{border}}}]}}"#
+        )))
+    };
+    assert_eq!(solve(r#""top""#), Some(12));
+    assert_eq!(solve(r#"["top"]"#), Some(12));
+    assert_eq!(solve(r#"["top","left"]"#), Some(14)); // 10 + 40%
+    assert_eq!(solve(r#"["bottom","right"]"#), Some(10)); // touches neither
+                                                          // negative: -56 with two sides -> -56 + trunc(-56 * 4 / 10) = -78
+    let p = parse(
+        r#"{"width":1,"height":1,"items":[
+        {"name":"A","performance":-56,"shape":[[0,0]],"border":["top","right"],"required":true}]}"#,
+    );
+    assert_eq!(solve_value(&p), Some(-78));
+}
+
+#[test]
 fn negative_bonus_rounds_toward_zero() {
     // -56 with the top bonus: -56 + trunc(-11.2) = -67 (floor would give -68). Required, so placed.
     let p = parse(
@@ -150,6 +171,9 @@ fn rejects_bad_input() {
         r#"{"width":3,"height":2,"goal":{"performance":"max","quality":"max"},"items":[]}"#,
         r#"{"width":3,"height":2,"goal":{"speed":"max"},"items":[]}"#,
         r#"{"width":3,"#,
+        r#"{"width":2,"height":2,"items":[{"name":"A","value":1,"type":"V","border":["top","bottom"]}]}"#,
+        r#"{"width":2,"height":2,"items":[{"name":"A","value":1,"type":"V","border":["left","right"]}]}"#,
+        r#"{"width":2,"height":2,"items":[{"name":"A","value":1,"type":"V","border":["top","top"]}]}"#,
     ] {
         assert!(problem::parse(bad).is_err(), "should reject {bad}");
     }
@@ -218,7 +242,16 @@ fn random_instance(rng: &mut Rng, full: bool) -> String {
         .filter(|_| rng.below(7) == 0)
         .map(|c| format!("[{},{}]", c % w, c / w))
         .collect();
-    let borders = ["", "", "\"top\"", "\"bottom\"", "\"left\"", "\"right\""];
+    let borders = [
+        "",
+        "",
+        "\"top\"",
+        "\"bottom\"",
+        "\"left\"",
+        "\"right\"",
+        "[\"top\",\"left\"]",
+        "[\"bottom\",\"right\"]",
+    ];
     let mut items: Vec<String> = Vec::new();
     let mut shapes: Vec<String> = Vec::new();
     for i in 0..1 + rng.below(4) {
@@ -252,7 +285,7 @@ fn random_instance(rng: &mut Rng, full: bool) -> String {
         } else {
             format!("\"value\":{}", 1 + rng.below(40))
         };
-        let border = borders[rng.below(6) as usize];
+        let border = borders[rng.below(borders.len() as u64) as usize];
         let border = if border.is_empty() {
             String::new()
         } else {

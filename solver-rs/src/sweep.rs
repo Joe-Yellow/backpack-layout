@@ -10,7 +10,7 @@
 //! stored per state; they are decoded when expanding.
 //!
 //! Scoring, per slot (active attribute: the maximized one, then each target). Rewards are paid as
-//! they change: an item is worth v + trunc(v * m / 10) with m = 2*border + adjacent pieces, a piece
+//! they change: an item is worth v + trunc(v * m / 10) with m = 2*(border sides touched) + adjacent pieces, a piece
 //! trunc(S / 5) with S the summed bases of its adjacent items; each new adjacency pays
 //! new - old of those values, which telescopes to exactly the final value, toward-zero rounding and
 //! negative values included. An open item carries m, an open piece S per slot. In a slot where no
@@ -90,7 +90,8 @@ pub struct ItemClass<B> {
 struct Anchored {
     cls: usize,
     cells: Vec<usize>,
-    touch: bool,
+    /// Border sides touched.
+    touch: u8,
 }
 
 /// A successor state plus the reward collected by the step and the step code.
@@ -240,7 +241,7 @@ impl<B: Bits> Sweep<B> {
                     if v >= 0 {
                         return 0;
                     }
-                    let m = if rep.border.is_some() { 2 } else { 0 };
+                    let m = 2 * rep.border.len() as i32;
                     let own = -v
                         + if rep.adj_bonus {
                             -v * (m + k) / 10
@@ -412,9 +413,7 @@ impl<B: Bits> Sweep<B> {
             }
         };
         if can_empty {
-            out(self.place(
-                pos, ents, used, DOMINO, None, false, tracked, STEP_EMPTY, sc,
-            ));
+            out(self.place(pos, ents, used, DOMINO, None, 0, tracked, STEP_EMPTY, sc));
         }
         if along {
             let cells = [pos, pos + 1];
@@ -424,7 +423,7 @@ impl<B: Bits> Sweep<B> {
                 used,
                 DOMINO,
                 Some(&cells),
-                false,
+                0,
                 tracked,
                 STEP_PIECE_ALONG,
                 sc,
@@ -438,7 +437,7 @@ impl<B: Bits> Sweep<B> {
                 used,
                 DOMINO,
                 Some(&cells),
-                false,
+                0,
                 tracked,
                 STEP_PIECE_ACROSS,
                 sc,
@@ -519,7 +518,7 @@ impl<B: Bits> Sweep<B> {
         mut used: B,
         cls: i32,
         cells: Option<&[usize]>,
-        touch: bool,
+        touch: u8,
         tracked: B,
         code: u32,
         sc: &mut Scratch,
@@ -547,7 +546,7 @@ impl<B: Bits> Sweep<B> {
                 } else {
                     let ic = &self.classes[cls as usize];
                     let vc = &self.vclasses[ic.vclass];
-                    let m = if touch { 2 } else { 0 };
+                    let m = 2 * touch as i32;
                     for j in 0..SLOTS {
                         let v = vc.vals[j];
                         gain[j] += v + v * m / 10;

@@ -2,10 +2,10 @@
 
 use crate::problem::{Border, Cell, Problem};
 
-/// cells sorted ascending; touch = satisfies the item's border requirement.
+/// cells sorted ascending; touch = how many of the item's border sides it touches.
 pub struct Placement {
     pub cells: Vec<usize>,
-    pub touch: bool,
+    pub touch: u8,
 }
 
 /// Distinct normalized orientations among the 8 rotations/mirrors; points sorted by (y, x).
@@ -44,17 +44,20 @@ pub fn shape_key(shape: &[Cell]) -> Vec<Cell> {
     orientations(shape).into_iter().min().unwrap()
 }
 
-pub fn touches(border: Option<Border>, cells: &[usize], w: usize, h: usize) -> bool {
-    let Some(b) = border else { return false };
-    cells.iter().any(|&c| {
-        let (x, y) = (c % w, c / w);
-        match b {
-            Border::Top => y == 0,
-            Border::Bottom => y == h - 1,
-            Border::Left => x == 0,
-            Border::Right => x == w - 1,
-        }
-    })
+/// Number of the given sides the cells touch (each touched side earns its own bonus).
+pub fn touches(border: &[Border], cells: &[usize], w: usize, h: usize) -> u8 {
+    let on = |b: Border| {
+        cells.iter().any(|&c| {
+            let (x, y) = (c % w, c / w);
+            match b {
+                Border::Top => y == 0,
+                Border::Bottom => y == h - 1,
+                Border::Left => x == 0,
+                Border::Right => x == w - 1,
+            }
+        })
+    };
+    border.iter().filter(|&&b| on(b)).count() as u8
 }
 
 /// All legal placements of one item: inside the board, not on blocked cells.
@@ -75,7 +78,7 @@ pub fn placements(p: &Problem, item: usize) -> Vec<Placement> {
                 if cells.iter().any(|&c| blocked[c]) {
                     continue;
                 }
-                let touch = touches(it.border, &cells, w as usize, h as usize);
+                let touch = touches(&it.border, &cells, w as usize, h as usize);
                 out.push(Placement { cells, touch });
             }
         }

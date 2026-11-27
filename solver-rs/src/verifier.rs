@@ -106,7 +106,7 @@ pub fn evaluate(p: &Problem, l: &Layout) -> Result<Score, String> {
             let Some(cells) = &l.item_cells[i] else {
                 return [0; 3];
             };
-            let t = touches(it.border, cells, w, h) as i64;
+            let t = touches(&it.border, cells, w, h) as i64;
             let k = if it.adj_bonus {
                 adjacent_dominoes[i]
             } else {

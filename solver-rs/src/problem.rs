@@ -21,13 +21,21 @@ pub const MAX_ABS_VALUE: i64 = 1_000_000;
 /// JSON names of the attributes, in index order.
 pub const ATTRS: [&str; 3] = ["performance", "quality", "efficiency"];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Border {
     Top,
     Bottom,
     Left,
     Right,
+}
+
+/// `"border"`: one side, or a list of sides (each touched side adds its own bonus).
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum BorderSpec {
+    One(Border),
+    Many(Vec<Border>),
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,7 +56,7 @@ pub struct ItemInput {
     #[serde(default)]
     pub shape: Option<Vec<Cell>>,
     #[serde(default)]
-    pub border: Option<Border>,
+    pub border: Option<BorderSpec>,
     #[serde(default)]
     pub adj_bonus: bool,
     /// The item must be placed.
@@ -86,7 +94,9 @@ pub struct Item {
     pub attrs: [i32; 3],
     pub r#type: Option<String>,
     pub shape: Vec<Cell>,
-    pub border: Option<Border>,
+    /// Sides that each give the border bonus when touched; sorted, at most one of top/bottom and
+    /// one of left/right.
+    pub border: Vec<Border>,
     pub adj_bonus: bool,
     pub required: bool,
 }
@@ -210,12 +220,27 @@ fn validate_item(it: ItemInput) -> Result<Item, String> {
     for c in &shape {
         require(seen.insert(*c), || format!("{name}: duplicate shape cell"))?;
     }
+    let mut border = match it.border {
+        None => Vec::new(),
+        Some(BorderSpec::One(b)) => vec![b],
+        Some(BorderSpec::Many(v)) => v,
+    };
+    border.sort_unstable();
+    let opposite = |a, b| border.contains(&a) && border.contains(&b);
+    require(
+        border.windows(2).all(|w| w[0] != w[1])
+            && !opposite(Border::Top, Border::Bottom)
+            && !opposite(Border::Left, Border::Right),
+        || {
+            format!("{name}: border sides must differ, and not be both top and bottom or both left and right")
+        },
+    )?;
     Ok(Item {
         name,
         attrs: raw.map(|v| v as i32),
         r#type: it.r#type,
         shape,
-        border: it.border,
+        border,
         adj_bonus: it.adj_bonus,
         required: it.required,
     })

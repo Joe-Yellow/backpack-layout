@@ -63,25 +63,25 @@
   .btn.primary:disabled { background: var(--ink-soft); border-color: var(--ink-soft); box-shadow: none; cursor: progress; transform: none; }
 
   .desk {
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 28px;
-    max-width: 1320px; margin: 0 auto; padding: 28px 32px 60px; align-items: start;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 36px;
+    max-width: 1320px; margin: 0 auto; padding: 32px 32px 72px; align-items: start;
   }
-  @media (max-width: 1000px) {
+  @media (max-width: 1280px) { /* the item table needs ~640px beside the board: stack below this */
     .desk { grid-template-columns: 1fr; }
   }
   .card { background: var(--card); border: 1.5px solid var(--ink); border-radius: var(--radius-l); box-shadow: var(--shadow); }
 
-  .board-card { padding: 22px 26px 26px; }
+  .board-card { padding: 26px 32px 32px; }
   /* keep the board in view beside the item list; only in two columns, where nothing is below it */
-  @media (min-width: 1001px) { .board-card { position: sticky; top: 16px; } }
-  .board-head { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-bottom: 18px; }
+  @media (min-width: 1281px) { .board-card { position: sticky; top: 16px; } }
+  .board-head { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-bottom: 22px; }
   .dims { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); }
   .dims input { width: 54px; padding: 4px 6px; border: 1.5px solid var(--rule); border-radius: var(--radius-s); background: #fff; text-align: center; }
   .hint { color: var(--ink-soft); font-size: 13px; }
 
-  .board-wrap { overflow-x: auto; padding: 4px 2px 10px; }
+  .board-wrap { overflow-x: auto; padding: 4px 2px 10px; container-type: inline-size; }
   .board {
-    --cell: min(60px, calc((100vw - 64px) / var(--cols))); /* shrink to fit narrow screens */
+    --cell: min(72px, calc((100cqw - 6px) / var(--cols))); /* as large as the card allows */
     display: grid; grid-template-columns: repeat(var(--cols), var(--cell)); gap: 0;
     width: max-content; border: 2.5px solid var(--ink); background: #fff;
   }
@@ -91,6 +91,8 @@
     transition: filter .15s;
   }
   .cell:hover { filter: brightness(.94); }
+  .board.locked .cell { cursor: default; }
+  .board.locked .cell:hover { filter: none; }
   .cell.blocked {
     background: repeating-linear-gradient(45deg, var(--ink) 0 3px, #3a352c 3px 9px);
     background-attachment: fixed;
@@ -100,16 +102,16 @@
     background-attachment: fixed; /* one stripe field for the whole page, so the two halves join seamlessly */
   }
   .cell .tag {
-    position: absolute; left: 5px; top: 4px; right: 4px; text-align: left; pointer-events: none;
+    position: absolute; left: 6px; top: 5px; right: 4px; text-align: left; pointer-events: none;
     font: 700 clamp(9px, calc(var(--cell) * .2), 12px)/1.15 var(--font-mono); color: #fff; text-shadow: 0 1px 0 rgba(0, 0, 0, .25);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .cell .tag small { display: block; font: 500 clamp(8px, calc(var(--cell) * .17), 10px)/1.2 var(--font-sans); opacity: .9; }
-  .cell.piece .tag { color: var(--ink); text-shadow: none; }
-  .cell .tag.info { font-weight: 600; font-size: clamp(8px, calc(var(--cell) * .18), 11px); line-height: 1.2; }
+  .cell.piece .tag { color: var(--ink-soft); text-shadow: none; font-weight: 600; font-size: clamp(8px, calc(var(--cell) * .16), 11px); }
+  .cell .tag.info { font-weight: 600; font-size: clamp(8px, calc(var(--cell) * .16), 11px); line-height: 1.3; opacity: .92; }
   .cell .tag.info i { font-style: normal; opacity: .8; margin-right: 2px; }
   .breakdown .bonus small { display: block; font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
-  .solve-bar { display: flex; align-items: center; gap: 16px; margin-top: 20px; flex-wrap: wrap; }
+  .solve-bar { display: flex; align-items: center; gap: 12px 20px; margin-top: 24px; flex-wrap: wrap; }
   .fast-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; user-select: none; }
   .fast-toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
   .fast-toggle small { color: var(--ink-soft); }
@@ -117,35 +119,44 @@
   .status.ok { color: var(--ok); font-weight: 700; }
   .status.err { color: var(--accent); font-weight: 700; }
 
-  .total { display: flex; align-items: baseline; gap: 12px; margin-top: 22px; padding-top: 16px; border-top: 1.5px dashed var(--rule); }
+  .total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 12px; margin-top: 26px; padding-top: 20px; border-top: 1.5px dashed var(--rule); }
   .total[hidden] { display: none; }
   .total .num { font: 700 56px/1 var(--font-display); }
   .total .lbl { font-size: 13px; color: var(--ink-soft); }
-  .total .proof { margin-left: auto; font: 600 12px var(--font-mono); color: var(--ok); border: 1.5px solid var(--ok); padding: 3px 8px; border-radius: 999px; }
+  .total .totals { flex-basis: 100%; } /* the proof badge wraps onto its own line */
+  .total .proof { font: 600 12px var(--font-mono); color: var(--ok); border: 1.5px solid var(--ok); padding: 3px 8px; border-radius: 999px; }
   .total .proof.approx { color: #9a6200; border-color: #c98a1a; } /* amber: a good layout, not a proven one */
 
   table { width: 100%; border-collapse: collapse; }
-  .breakdown { margin-top: 14px; font-size: 13px; }
-  .breakdown th { text-align: left; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); border-bottom: 1.5px solid var(--ink); padding: 6px 4px; }
-  .breakdown td { padding: 5px 4px; border-bottom: 1px solid var(--rule); }
+  .breakdown { margin-top: 18px; font-size: 13px; }
+  .breakdown th { text-align: left; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); border-bottom: 1.5px solid var(--ink); padding: 8px 6px; }
+  .breakdown td { padding: 9px 6px; border-bottom: 1px solid var(--rule); }
   .breakdown td.num { font-family: var(--font-mono); text-align: right; }
   .breakdown th.num { text-align: right; }
   .breakdown .plus { color: var(--ok); }
   .chip { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 
-  .items-card { padding: 22px 0 10px; }
-  .items-card > header { padding: 0 26px 6px; display: flex; align-items: baseline; justify-content: space-between; }
+  .items-card { padding: 26px 0 14px; }
+  .items-card > header { padding: 0 32px 8px; display: flex; align-items: baseline; justify-content: space-between; }
   .count { font: 12px var(--font-mono); color: var(--ink-soft); }
   .head-tools { display: flex; align-items: baseline; gap: 12px; }
-  .btn.clear { padding: 3px 10px; font-size: 12px; }
+  .btn.clear, .btn.board-edit { padding: 3px 10px; font-size: 12px; }
+  .btn.board-edit { margin-left: auto; }
+  .btn.board-edit[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--card); }
+  .status .undo { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+  .btn.edit-toggle { margin-left: auto; letter-spacing: normal; font-family: var(--font-sans); padding: 6px 16px; font-size: 14px; font-weight: 700; border-color: var(--accent); color: var(--accent); background: #fff; box-shadow: 0 3px 0 -1px var(--accent); }
+  .btn.edit-toggle:hover { background: #fbe9e4; }
+  .btn.edit-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); box-shadow: 0 3px 0 -1px #8f2c1c; }
+  .head-tools { align-items: center; }
+  .head-tools .btn, .head-tools .count, .items-card > header h2 { white-space: nowrap; }
   .btn.clear:disabled { opacity: .4; cursor: default; }
-  .item-list > summary { padding: 12px 26px; cursor: pointer; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); list-style: none; }
+  .item-list > summary { display: flex; align-items: center; gap: 12px; padding: 14px 32px 8px; cursor: pointer; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); list-style: none; }
   .item-list > summary::-webkit-details-marker { display: none; }
   .item-list > summary::before { content: "▾"; display: inline-block; margin-right: 6px; transition: transform .15s; }
   .item-list:not([open]) > summary::before { transform: rotate(-90deg); }
   .item-list > summary:hover { color: var(--ink); }
-  .palette-label { margin: 10px 26px 0; font-size: 13px; color: var(--accent); font-weight: 600; }
-  .palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px; padding: 8px 26px 14px; }
+  .palette-label { margin: 12px 32px 0; font-size: 13px; color: var(--accent); font-weight: 600; }
+  .palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 10px; padding: 10px 32px 20px; }
   .palette .custom { position: relative; display: grid; }
   .palette .custom .x { position: absolute; top: 2px; right: 2px; border: 0; background: none; color: var(--ink-soft); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px; }
   .palette .custom .x:hover { color: var(--accent); background: #f4e1dc; }
@@ -159,11 +170,11 @@
   .draw-grid button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); }
   .shape-editor .err { color: var(--accent); min-height: 1.2em; }
   .shape-editor menu { display: flex; justify-content: flex-end; gap: 8px; margin: 0; padding: 0; }
-  .presets { padding: 0 26px 16px; border-bottom: 1.5px solid var(--ink); }
-  .presets h3 { margin: 0 0 8px; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); }
+  .presets { padding: 0 32px 22px; border-bottom: 1.5px solid var(--ink); }
+  .presets h3 { margin: 0 0 10px; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); }
   .preset-list { display: flex; flex-wrap: wrap; gap: 8px; }
   .preset-list .empty-note { margin: 0; font-size: 12px; color: var(--ink-soft); }
-  .group-save { display: flex; gap: 8px; margin-bottom: 10px; }
+  .group-save { display: flex; gap: 10px; margin-bottom: 12px; }
   .group-save input { flex: 1; width: 0; min-width: 0; padding: 6px 8px; border: 1.5px solid var(--rule); border-radius: var(--radius-s); background: #fff; }
   .group-save .btn { padding: 6px 12px; white-space: nowrap; }
   .preset { position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 26px 6px 8px; cursor: pointer;
@@ -189,10 +200,10 @@
 
   .items { font-size: 14px; }
   .items th { text-align: left; font: 600 11px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft); padding: 10px 6px; }
-  .items th:first-child, .items td:first-child { padding-left: 26px; }
-  .items th:last-child, .items td:last-child { padding-right: 14px; }
-  .items td { padding: 6px 4px; border-top: 1px solid var(--rule); vertical-align: middle; }
-  .items td.attr input { min-width: 58px; padding: 5px 4px; text-align: right; -moz-appearance: textfield; appearance: textfield; } /* fits -999 */
+  .items th:first-child, .items td:first-child { padding-left: 32px; }
+  .items th:last-child, .items td:last-child { padding-right: 18px; }
+  .items td { padding: 10px 4px; border-top: 1px solid var(--rule); vertical-align: middle; }
+  .items td.attr input { min-width: 50px; padding: 5px 4px; text-align: right; -moz-appearance: textfield; appearance: textfield; } /* fits -999 */
   .items td.attr input::-webkit-inner-spin-button, .items td.attr input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; } /* spinners ate ~15px */
   .items tbody tr { transition: background .15s; }
   .items tbody tr:hover { background: #fff; }
@@ -202,12 +213,64 @@
   .items input:hover, .items select:hover { border-color: var(--rule); background: #fff; }
   .items input:focus, .items select:focus { border-color: var(--ink); background: #fff; outline: none; }
   .items input[type=number] { font-family: var(--font-mono); }
-  .type-cell { display: flex; align-items: center; gap: 8px; }
-  .type-cell svg { width: 40px; height: 28px; flex: none; } /* fixed box; viewBox centers any shape inside */
-  .type-cell select { width: auto; font-family: var(--font-mono); font-weight: 700; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .items td.shape { padding-right: 0; }
+  .shape-toggle { display: grid; place-items: center; width: 48px; height: 36px; padding: 0; border: 1.5px solid transparent; border-radius: var(--radius-s); background: none; cursor: pointer; }
+  .shape-toggle:hover { border-color: var(--rule); background: #fff; }
+  .shape-toggle svg { width: 40px; height: 28px; } /* fixed box; viewBox centers any shape inside */
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; padding-left: 8px; }
   .used { font: 11px var(--font-mono); color: var(--ok); white-space: nowrap; }
   .used.none { color: var(--ink-soft); }
-  .del { border: 0; background: none; cursor: pointer; color: var(--ink-soft); font-size: 18px; line-height: 1; padding: 4px 8px; border-radius: var(--radius-s); }
+  .chip-tag { font: 600 11px/1.6 var(--font-sans); padding: 0 7px; border: 1px solid transparent; border-radius: 999px; background: var(--paper-deep); color: var(--ink-soft); white-space: nowrap; cursor: pointer; }
+  .chip-tag:hover { border-color: currentColor; }
+  .chip-tag.add { background: none; border: 1px dashed var(--rule); font-weight: 500; }
+  .chip-tag.add:hover { border-color: var(--ink); color: var(--ink); }
+  .chip-tag.side { background: #f6ddd6; color: var(--accent); }
+  .chip-tag.must { background: var(--ink); color: var(--card); }
+  .items td.more { text-align: right; }
+  .more-btn { display: inline-flex; align-items: center; gap: 3px; height: 28px; padding: 0 8px 0 10px; border: 1.5px solid var(--rule); border-radius: 999px; background: none; color: var(--ink-soft); cursor: pointer; font-size: 12px; }
+  .more-btn:hover { border-color: var(--ink); color: var(--ink); background: #fff; }
+  .more-btn .chev { display: inline-block; font-size: 14px; line-height: 1; transition: transform .2s var(--ease); }
+  .more-btn[aria-expanded="true"] { border-color: var(--ink); color: var(--ink); background: #fff; }
+  .more-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .items tr.open, .items tr.detail { background: #fff; } /* on the row: no seams between cells */
+  /* locked (not editing): fields read as plain text and the whole row opens the bonuses */
+  .items tr.locked { cursor: pointer; }
+  .items tr.locked input[readonly], .items tr.locked select:disabled {
+    border-color: transparent !important; background: transparent !important; color: var(--ink); opacity: 1;
+    pointer-events: none; /* plain text: no caret, and the click falls through to the row */
+  }
+  .items tr.locked select:disabled { appearance: none; -webkit-appearance: none; padding-right: 4px; }
+  .items tr.locked:hover:not(.open) { background: #fff; }
+  /* editing: every field shows its box, so it is plain what can be typed into */
+  .items tr.item:not(.locked) input:not([type=checkbox]), .items tr.item:not(.locked) select { border-color: var(--rule); background: #fff; }
+  .items tr.item > td:first-child { box-shadow: inset 4px 0 0 var(--row-color); transition: box-shadow .15s; } /* same color as on the board */
+  .items tr.item.hl { background: #fff; }
+  .items tr.item.hl > td:first-child { box-shadow: inset 7px 0 0 var(--row-color); }
+  .items tr.unused { opacity: .5; transition: opacity .15s; } /* left out of the last solution */
+  .items tr.unused:hover, .items tr.unused.open { opacity: 1; }
+  .bar { height: 3px; margin: 3px 4px 0; border-radius: 2px; background: linear-gradient(to left, var(--row-color) var(--w), var(--rule) var(--w)); opacity: .85; }
+  .bar.neg { background: linear-gradient(to left, var(--accent) var(--w), var(--rule) var(--w)); }
+  .final { margin-top: 3px; padding-right: 4px; text-align: right; font: 600 11px var(--font-mono); color: var(--ok); white-space: nowrap; }
+  .final.neg { color: var(--accent); }
+  .board.focus .cell[data-row]:not(.hl) { filter: saturate(.2) opacity(.45); }
+  .items tr.detail > td { padding: 2px 18px 18px 32px; border-top: 0; }
+  .settings { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 12px 16px; border: 1.5px dashed var(--rule); border-radius: var(--radius-s); }
+  .field { display: flex; flex: none; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
+  .field > span { color: var(--ink-soft); font: 600 11px var(--font-mono); letter-spacing: .12em; }
+  .field small { color: var(--ink-soft); font-size: 11px; }
+  .field select { padding: 4px 8px; border: 1.5px solid var(--rule); border-radius: var(--radius-s); background: #fff; font: 700 13px var(--font-mono); }
+  .field.check { cursor: pointer; user-select: none; }
+  .field.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .sides { display: grid; grid-template-columns: repeat(2, 26px); gap: 4px; }
+  .sides.row { grid-template-columns: repeat(4, 30px); }
+  .sides button { height: 26px; padding: 0; font-size: 12px; line-height: 1; cursor: pointer; border: 1.5px solid var(--rule); border-radius: 4px; background: #fff; color: var(--ink-soft); }
+  .sides button:hover { border-color: var(--ink); color: var(--ink); }
+  .sides button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .type-pick { display: flex; align-items: center; gap: 4px; }
+  .type-pick select { width: auto; padding: 4px 4px; font: 700 13px var(--font-mono); }
+  .items td.more { white-space: nowrap; }
+  .del { width: 28px; height: 32px; border: 0; background: none; cursor: pointer; color: var(--ink-soft); font-size: 18px; line-height: 1; border-radius: var(--radius-s); }
   .del:hover { color: var(--accent); background: #f4e1dc; }
   .empty { padding: 26px; margin: 0; color: var(--ink-soft); text-align: center; }
   .empty[hidden] { display: none; }
@@ -231,10 +294,11 @@
   .totals .lbl { font-size: 13px; color: var(--ink-soft); margin-left: 4px; }
   .totals .met { font: 600 12px var(--font-mono); color: var(--ok); margin-left: 4px; }
   .totals .skip { opacity: .4; }
-  .total .proof { margin-left: auto; }
+  .total .proof { margin-left: 0; }
   .infeasible { border: 1.5px solid var(--accent); border-radius: var(--radius-s); padding: 12px 14px; color: var(--accent); font-size: 14px; width: 100%; }
   .infeasible ul { margin: 6px 0 0; padding-left: 20px; color: var(--ink); }
-  .items th.attr { width: 64px; text-align: right; padding-right: 8px; }
+  .items th.attr { width: 88px; text-align: right; padding-right: 8px; } /* room for the bars; the name column takes what is left */
+  .items th.attr.qty { width: 60px; }
   .breakdown td.skip { opacity: .4; }
   .breakdown .base { color: var(--ink-soft); font-size: 11px; margin-left: 3px; }
 
@@ -250,7 +314,9 @@
     .total { flex-wrap: wrap; }
     .totals .main .num { font-size: 44px; }
     .total .proof { margin-left: 0; }
-    .items-card > header { padding: 0 16px 6px; }
+    .items-card > header { padding: 0 16px 6px; flex-wrap: wrap; row-gap: 10px; }
+    .head-tools { width: 100%; } /* count on the left, the two buttons on the right, under the title */
+    .head-tools .count { margin-right: auto; }
     .item-list > summary { padding: 12px 16px; }
     .palette-label { margin: 8px 16px 0; }
     .palette { gap: 6px; padding: 8px 16px 12px; }
@@ -261,28 +327,33 @@
     /* 16px inputs: iOS zooms the page when focusing anything smaller */
     input, select { font-size: 16px; }
 
-    /* item table becomes one card per item: shape + name / attributes + count / border, flags */
+    /* each item: icon, name, toggle on top; the three attributes and the count below */
     .items thead { display: none; }
     .items, .items tbody { display: block; }
-    .items tr {
-      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px;
-      position: relative; padding: 12px 48px 12px 16px; border-top: 1px solid var(--rule);
+    .items tr.item {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px; align-items: start;
+      padding: 12px 16px; border-top: 1px solid var(--rule);
     }
-    .items td, .items td:first-child, .items td:last-child { display: block; padding: 0; border: 0; }
-    .items td::before {
+    .items tr.item > td { display: block; padding: 0; border: 0; }
+    .items tr.item { box-shadow: inset 4px 0 0 var(--row-color); }
+    .items tr.item > td:first-child, .items tr.item.hl > td:first-child { box-shadow: none; }
+    .items td.shape { grid-column: 1 / 3; grid-row: 1; }
+    .items td.more { grid-column: 3 / 5; grid-row: 1; justify-self: end; }
+    .items td.name { grid-column: 1 / 5; grid-row: 2; }
+    .items td.attr::before {
       content: attr(data-label); display: block; margin-bottom: 2px;
       font: 600 10px var(--font-mono); letter-spacing: .12em; color: var(--ink-soft);
     }
-    /* shape icon + select need ~100px: give them two of the four columns */
-    .items td:nth-child(1) { grid-column: 1 / 3; }
-    .items td:nth-child(2) { grid-column: 3 / 5; }
-    .items td:nth-child(9) { grid-column: 4; grid-row: 2; } /* count next to the attributes */
-    .items td:last-child { position: absolute; top: 10px; right: 8px; }
-    .items td:last-child::before { display: none; }
-    .items td.check { text-align: left !important; }
     .items input[type=text], .items input[type=number], .items select { border-color: var(--rule); background: #fff; }
-    .items input[type=checkbox] { width: 22px; height: 22px; margin: 6px 0 0; }
-    .del { font-size: 22px; padding: 6px 10px; }
+    .items tr.detail { display: block; }
+    .items tr.detail > td { display: block; padding: 0 16px 14px; }
+    .settings { gap: 12px 18px; padding: 12px; }
+    .sides.row { grid-template-columns: repeat(4, 38px); }
+    .sides button { height: 32px; font-size: 13px; } /* finger-sized */
+    .field.check input { width: 20px; height: 20px; }
+    .more-btn { height: 36px; padding: 0 12px 0 14px; font-size: 13px; }
+    .chip-tag { line-height: 2; padding: 0 9px; } /* finger-sized */
+    .del { width: 40px; height: 40px; font-size: 22px; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -308,7 +379,8 @@
         <label>宽 <input id="w" type="number" min="1" max="12"></label>×
         <label>高 <input id="h" type="number" min="1" max="12"></label>
       </div>
-      <span class="hint">点击格子切换禁用格</span>
+      <span class="hint" id="boardHint">点击格子切换禁用格</span>
+      <button class="btn board-edit" id="boardEditBtn" type="button" aria-pressed="false" hidden>✎ 修改禁用格</button>
     </div>
     <div class="board-wrap"><div id="board" class="board" role="grid" aria-label="棋盘"></div></div>
     <div class="goal" id="goal" role="group" aria-label="求解目标"></div>
@@ -334,9 +406,9 @@
       <div class="preset-list" id="presets"></div>
     </section>
     <details class="item-list" id="itemList" open>
-    <summary>物品列表</summary>
+    <summary><span>物品列表</span><button class="btn edit-toggle" id="editBtn" type="button" aria-pressed="false" title="打开后可以修改形状、名称、属性和数量">✎ 编辑</button></summary>
     <table class="items">
-      <thead><tr><th>形状</th><th>名称</th><th class="attr">性能</th><th class="attr">质量</th><th class="attr">效率</th><th style="width:76px">边界</th><th style="width:40px">邻接</th><th style="width:40px">必选</th><th style="width:58px">数量</th><th style="width:34px"></th></tr></thead>
+      <thead><tr><th style="width:124px">形状</th><th style="width:140px">名称</th><th class="attr">性能</th><th class="attr">质量</th><th class="attr">效率</th><th class="attr qty">数量</th><th><span class="sr">设置与删除</span></th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
     <p class="empty" id="emptyHint">点击上方形状添加物品</p>
@@ -356,7 +428,7 @@
   </dialog>
 </main>
 <footer class="colophon">
-  所有计算都在你的浏览器本地完成（WebAssembly 多线程），数据不会上传。物品越少、空间越挤，求解可能越久。
+  所有计算都在你的浏览器本地完成（WebAssembly 多线程），数据不会上传。快速模式通常几秒出结果；精确模式在物品多、达标条件多或属性有负值时，可能要几分钟。
 </footer>
 
 <script type="module">
@@ -365,7 +437,11 @@ const MAX_SIDE = 12, MAX_QTY = 255;
 const MAX_ITEMS = 5000; // the solver drops items that can't matter; exact mode then takes 63, fast mode 255
 const COLORS = { U: "#2f6690", F: "#c8553d", L: "#4f7d4e", T: "#7b4b94", O: "#b8860b", V: "#2f8582", I: "#a23b72" };
 const CUSTOM_COLORS = ["#5c6b73", "#8a6d3b", "#3d5a80", "#9c4f2e", "#4a7c59", "#6d4c7d"];
-const BORDERS = [["", "无"], ["top", "上"], ["bottom", "下"], ["left", "左"], ["right", "右"]];
+// border sides, laid out as a 2x2 grid; picking one drops its opposite (top/bottom, left/right)
+const SIDES = [["top", "上"], ["bottom", "下"], ["left", "左"], ["right", "右"]];
+const OPPOSITE = { top: "bottom", bottom: "top", left: "right", right: "left" };
+/** "top", ["top", "left"], "" or undefined -> a list of sides. */
+const toSides = (b) => (Array.isArray(b) ? b : b ? [b] : []).filter((x) => OPPOSITE[x]);
 // attribute index -> [JSON name, label, item field]
 const ATTRS = [["performance", "性能", "perf"], ["quality", "质量", "qual"], ["efficiency", "效率", "eff"]];
 const $ = (s) => document.querySelector(s);
@@ -465,10 +541,12 @@ function upgrade(s) {
     it.qual ??= 0;
     it.eff ??= 0;
     it.required ??= false;
+    it.border = toSides(it.border); // was a single side ("" for none)
     delete it.value;
   }
   s.goal ??= ["max", "skip", "skip"];
   s.fast ??= true; // fast mode by default: seconds instead of minutes
+  s.editing ??= false; // shape, name and attributes locked unless editing; bonuses always editable
   return s;
 }
 function corners(w, h) {
@@ -480,7 +558,31 @@ function corners(w, h) {
 }
 const sameCells = (a, b) => a.length === b.length && a.every(([x, y]) => b.some(([u, v]) => u === x && v === y));
 function save() { localStorage.setItem(STORE, JSON.stringify(state)); }
-function invalidate() { result = null; save(); render(); }
+let boardEdit = false;   // blocked cells may change while a result is shown
+let solvedState = null;  // state as it was solved, for undo once a change drops the result
+
+function invalidate() {
+  if (result) {
+    const undo = { state: solvedState, result, resultRows, resultGoal };
+    result = null;
+    boardEdit = false;
+    setStatus("结果已清除", "");
+    $("#status").append(" · ", el("button", { class: "undo", type: "button", title: "恢复到出结果时的设置和结果", onclick: () => restore(undo) }, "撤销"));
+  }
+  save();
+  render();
+}
+
+/** Back to the settings and result of the last solve. */
+function restore(undo) {
+  state = upgrade(JSON.parse(undo.state));
+  ({ result, resultRows, resultGoal } = undo);
+  solvedState = undo.state;
+  openRow = -1;
+  save();
+  render();
+  setStatus("已撤销，恢复到出结果时的设置", "ok");
+}
 
 function el(tag, attrs = {}, ...kids) {
   const e = document.createElement(tag);
@@ -521,32 +623,35 @@ function rowColor(row) {
 function bonusOf(it) {
   const row = state.items[resultRows[it.index]];
   const [w, h] = [state.width, state.height];
-  const onEdge = ([x, y]) => ({ top: y === 0, bottom: y === h - 1, left: x === 0, right: x === w - 1 })[row.border];
-  const border = !!row.border && it.cells.some(onEdge);
+  const onSide = (side) => ([x, y]) => ({ top: y === 0, bottom: y === h - 1, left: x === 0, right: x === w - 1 })[side];
+  const sides = row.border.filter((side) => it.cells.some(onSide(side))); // each touched side: +20%
   let adj = 0;
   if (row.adj) {
     const mine = new Set(it.cells.map(([x, y]) => `${x},${y}`));
     adj = result.pieces.filter((pc) => pc.cells.some(([x, y]) =>
       [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => mine.has(`${x + dx},${y + dy}`)))).length;
   }
-  const parts = [border ? "边" : null, adj ? `邻${adj}` : null].filter(Boolean);
-  return { border: border ? row.border : null, onEdge, pct: (border ? 20 : 0) + 10 * adj, text: parts.join("·") };
+  const parts = [sides.length ? "边" + (sides.length > 1 ? sides.length : "") : null, adj ? `邻${adj}` : null].filter(Boolean);
+  return { sides, onSide, pct: 20 * sides.length + 10 * adj, text: parts.join("·") };
 }
 const ATTR_SHORT = ["性", "质", "效"];
 
 function renderBoard() {
   const board = $("#board");
+  // the cells are replaced: the one under the mouse never gets its pointerleave, so drop any highlight
+  board.classList.remove("focus");
+  document.querySelectorAll("#rows tr.item.hl").forEach((tr) => tr.classList.remove("hl"));
   board.style.setProperty("--cols", state.width);
   board.replaceChildren();
   const blocked = new Set(state.blocked.map(([x, y]) => `${x},${y}`));
   const owner = new Map();
   const tags = new Map();
   const infos = new Map(); // cell -> lines [label, value] (base attributes, bonus)
-  const edges = new Map(); // cell -> side that earns the border bonus
+  const edges = new Map(); // cell -> sides that earn the border bonus
   if (result) {
     result.items.forEach((it) => {
       const id = "i" + it.index;
-      it.cells.forEach(([x, y]) => owner.set(`${x},${y}`, { id, color: rowColor(resultRows[it.index]) }));
+      it.cells.forEach(([x, y]) => owner.set(`${x},${y}`, { id, row: resultRows[it.index], color: rowColor(resultRows[it.index]) }));
       const sorted = [...it.cells].sort((a, b) => a[1] - b[1] || a[0] - b[0]);
       const m = maxAttr(resultGoal);
       tags.set(sorted[0].join(","), m < 0 ? [it.name, null] : [String(it.values[m]), it.name]);
@@ -554,7 +659,9 @@ function renderBoard() {
       const b = bonusOf(it);
       if (sorted[1]) infos.set(sorted[1].join(","), it.base.map((v, a) => [ATTR_SHORT[a], String(v)]));
       if (sorted[2] && b.pct) infos.set(sorted[2].join(","), [["", `+${b.pct}%`], ["", b.text]]);
-      if (b.border) it.cells.filter(b.onEdge).forEach(([x, y]) => edges.set(`${x},${y}`, b.border));
+      for (const side of b.sides) {
+        it.cells.filter(b.onSide(side)).forEach(([x, y]) => edges.set(`${x},${y}`, [...(edges.get(`${x},${y}`) || []), side]));
+      }
     });
     result.pieces.forEach((pc, j) => {
       pc.cells.forEach(([x, y]) => owner.set(`${x},${y}`, { id: "p" + j, piece: true }));
@@ -574,19 +681,29 @@ function renderBoard() {
         class: "cell" + (blocked.has(key) ? " blocked" : "") + (o && o.piece ? " piece" : ""),
         type: "button", role: "gridcell",
         "aria-label": `第 ${y + 1} 行 第 ${x + 1} 列${blocked.has(key) ? "（禁用）" : ""}`,
-        onclick: () => toggleBlocked(x, y),
+        onclick: () => {
+          if (result && !boardEdit) return setStatus("棋盘显示的是结果。要修改禁用格，请先点上方的「修改禁用格」", "err");
+          toggleBlocked(x, y);
+        },
       });
       if (o) {
-        if (!o.piece) cell.style.background = o.color;
+        if (!o.piece) {
+          cell.style.background = o.color;
+          cell.dataset.row = o.row;
+          cell.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") highlightRow(o.row); });
+          cell.addEventListener("pointerleave", () => highlightRow(-1));
+        }
         const same = (dx, dy) => (owner.get(`${x + dx},${y + dy}`) || {}).id === o.id;
         const sh = [];
         if (!same(0, -1)) sh.push(`inset 0 2.5px 0 ${ink}`);
         if (!same(0, 1)) sh.push(`inset 0 -2.5px 0 ${ink}`);
         if (!same(-1, 0)) sh.push(`inset 2.5px 0 0 ${ink}`);
         if (!same(1, 0)) sh.push(`inset -2.5px 0 0 ${ink}`);
-        const edge = edges.get(key), accent = "var(--accent)";
-        if (edge) sh.unshift({ top: `inset 0 6px 0 ${accent}`, bottom: `inset 0 -6px 0 ${accent}`,
-          left: `inset 6px 0 0 ${accent}`, right: `inset -6px 0 0 ${accent}` }[edge]);
+        const accent = "var(--accent)";
+        for (const side of edges.get(key) || []) {
+          sh.unshift({ top: `inset 0 6px 0 ${accent}`, bottom: `inset 0 -6px 0 ${accent}`,
+            left: `inset 6px 0 0 ${accent}`, right: `inset -6px 0 0 ${accent}` }[side]);
+        }
         cell.style.boxShadow = sh.join(",") || "none";
       }
       const t = tags.get(key);
@@ -609,6 +726,13 @@ function toggleBlocked(x, y) {
 }
 
 /* ---------- items ---------- */
+/** Links an item row with its pieces on the board (-1: nothing). Mouse only: a tap would stick. */
+function highlightRow(r) {
+  $("#board").classList.toggle("focus", r >= 0);
+  document.querySelectorAll("#board .cell[data-row]").forEach((c) => c.classList.toggle("hl", Number(c.dataset.row) === r));
+  document.querySelectorAll("#rows tr.item").forEach((tr, i) => tr.classList.toggle("hl", i === r));
+}
+
 function renderPalette() {
   const btn = (t) => el("button", { class: "shape-btn", type: "button", "aria-label": `添加 ${t} 形物品`, onclick: () => addItem(t) },
     shapeSvg(t, 13), el("b", {}, t));
@@ -691,6 +815,7 @@ function saveGroup(name) {
 function loadGroup(g) {
   if (state.items.length > 0 && !confirm(`用预设组「${g.name}」替换当前的物品列表吗？`)) return;
   state.items = upgrade({ items: copyItems(g.items) }).items;
+  openRow = -1;
   invalidate();
   setStatus(`已载入预设组「${g.name}」`, "ok");
 }
@@ -722,13 +847,17 @@ function renderGroups() {
 }
 
 function addItem(type) {
-  const item = { type, name: "", perf: 0, qual: 0, eff: 0, border: "", adj: false, required: false, qty: 1 };
+  const item = { type, name: "", perf: 0, qual: 0, eff: 0, border: [], adj: false, required: false, qty: 1 };
   if (!SHAPES[type]) item.cells = customCells(type);
   state.items.push(item);
+  state.editing = true; // a new item needs its values typed in
+  openRow = state.items.length - 1; // new items usually need their border/flags set
   invalidate();
-  const inputs = document.querySelectorAll("#rows tr:last-child input[type=text]");
-  if (inputs.length) inputs[0].focus();
+  const rows = document.querySelectorAll("#rows tr.item");
+  rows[rows.length - 1]?.querySelector("input[type=text]")?.focus();
 }
+
+let openRow = -1; // item whose settings panel is open (one at a time)
 
 function renderRows() {
   const usedByRow = new Map();
@@ -736,37 +865,98 @@ function renderRows() {
     const r = resultRows[it.index];
     usedByRow.set(r, (usedByRow.get(r) || 0) + 1);
   });
-  const rows = state.items.map((it, r) => {
+  if (openRow >= state.items.length) openRow = -1;
+  // final totals of each row's placed copies, per attribute
+  const finalByRow = new Map();
+  if (result) result.items.forEach((it) => {
+    const r = resultRows[it.index], sum = finalByRow.get(r) || [0, 0, 0];
+    finalByRow.set(r, sum.map((v, a) => v + it.values[a]));
+  });
+  // bars are scaled to the largest magnitude of each attribute in the list
+  const scale = Object.fromEntries(ATTRS.map(([, , f]) => [f, Math.max(1, ...state.items.map((it) => Math.abs(it[f])))]));
+  const rows = state.items.flatMap((it, r) => {
     const set = (k, parse = (v) => v) => (e) => { it[k] = parse(e.target.type === "checkbox" ? e.target.checked : e.target.value); invalidate(); };
-    const types = [...Object.keys(SHAPES), ...customShapes.map((c) => c.name)];
-    if (!types.includes(it.type)) types.push(it.type); // custom shape deleted from the palette
-    const typeSel = el("select", { "aria-label": "形状", onchange: (e) => {
-      const t = e.target.value;
-      if (SHAPES[t]) delete it.cells; else it.cells = customCells(t) || it.cells;
-      it.type = t;
-      invalidate();
-    } }, ...types.map((t) => el("option", { value: t, selected: t === it.type }, t)));
-    const borderSel = el("select", { "aria-label": "边界奖励", onchange: set("border") },
-      ...BORDERS.map(([v, l]) => el("option", { value: v, selected: v === it.border }, l)));
+    const open = r === openRow;
+    const toggle = () => { openRow = open ? -1 : r; renderRows(); };
     const used = result ? usedByRow.get(r) || 0 : null;
-    return el("tr", {},
-      el("td", { "data-label": "形状" }, el("div", { class: "type-cell" }, shapeSvg(it.type, 9, cellsOf(it)), typeSel)),
-      el("td", { "data-label": "名称" },
-        el("input", { type: "text", value: it.name, placeholder: `${it.type}${r + 1}`, "aria-label": "名称", onchange: set("name") }),
-        used == null ? null : el("span", { class: "used" + (used ? "" : " none") }, used ? `已用 ${used}/${it.qty}` : "未使用")),
-      ...ATTRS.map(([, label, field]) => el("td", { class: "attr", "data-label": label },
-        el("input", { type: "number", step: 1, value: it[field], "aria-label": label, onchange: set(field, toSigned) }))),
-      el("td", { "data-label": "边界" }, borderSel),
-      el("td", { class: "check", "data-label": "邻接", style: "text-align:center" }, el("input", { type: "checkbox", checked: it.adj, "aria-label": "邻接奖励", onchange: set("adj") })),
-      el("td", { class: "check", "data-label": "必选", style: "text-align:center" }, el("input", { type: "checkbox", checked: it.required, "aria-label": "必选", onchange: set("required") })),
-      el("td", { "data-label": "数量" }, el("input", { type: "number", min: 1, max: MAX_QTY, step: 1, value: it.qty, "aria-label": "数量", onchange: set("qty", (v) => Math.max(1, toInt(v))) })),
-      el("td", {}, el("button", { class: "del", type: "button", "aria-label": "删除", onclick: () => { state.items.splice(r, 1); invalidate(); } }, "×")));
+    const sides = SIDES.filter(([side]) => it.border.includes(side)).map(([, label]) => label).join("");
+    const tag = (cls, text) => el("button", { class: "chip-tag " + cls, type: "button", title: "设置边界、接收器、必选", onclick: toggle }, text);
+    const bonusTags = [
+      sides ? tag("side", `边 ${sides}`) : null,
+      it.adj ? tag("", "接收器") : null,
+      it.required ? tag("must", "必选") : null,
+    ].filter(Boolean);
+    const meta = [
+      used == null ? null : el("span", { class: "used" + (used ? "" : " none") }, used ? `已用 ${used}/${it.qty}` : "未使用"),
+      ...(bonusTags.length ? bonusTags : [tag("add", "+ 边界 / 接收器")]),
+    ];
+    const final = finalByRow.get(r);
+    const locked = !state.editing;
+    const main = el("tr", {
+      class: "item" + (open ? " open" : "") + (used === 0 ? " unused" : "") + (locked ? " locked" : ""), style: `--row-color: ${rowColor(r)}`,
+      // locked: a click anywhere on the row (but on its buttons) opens the bonuses
+      onclick: (e) => { if (locked && !e.target.closest("button")) toggle(); },
+      onpointerenter: (e) => { if (e.pointerType === "mouse") highlightRow(r); },
+      onpointerleave: () => highlightRow(-1),
+    },
+      el("td", { class: "shape" }, el("div", { class: "type-pick" },
+        el("button", { class: "shape-toggle", type: "button", title: "展开设置",
+          "aria-label": `${it.name || it.type} 的设置`, "aria-expanded": String(open), onclick: toggle }, shapeSvg(it.type, 9, cellsOf(it))),
+        typeSelect(it))),
+      el("td", { class: "name" },
+        el("input", { type: "text", value: it.name, placeholder: `${it.type}${r + 1}`, "aria-label": "名称", readonly: locked, tabindex: locked ? -1 : null, onchange: set("name") }),
+        meta.length ? el("div", { class: "meta" }, ...meta) : null),
+      ...ATTRS.map(([, label, field], a) => el("td", { class: "attr", "data-label": label },
+        el("input", { type: "number", step: 1, value: it[field], "aria-label": label, readonly: locked, tabindex: locked ? -1 : null, onchange: set(field, toSigned) }),
+        el("div", { class: "bar" + (it[field] < 0 ? " neg" : ""), style: `--w: ${(100 * Math.abs(it[field])) / scale[field]}%` }),
+        final && (final[a] || it[field]) ? el("div", { class: "final" + (final[a] < 0 ? " neg" : ""), title: "求解后的最终值（含加成，同一行多件为合计）" }, `→ ${final[a]}`) : null)),
+      el("td", { class: "attr", "data-label": "数量" }, el("input", { type: "number", min: 1, max: MAX_QTY, step: 1, value: it.qty, "aria-label": "数量", readonly: locked, tabindex: locked ? -1 : null, onchange: set("qty", (v) => Math.max(1, toInt(v))) })),
+      el("td", { class: "more" },
+        el("button", { class: "more-btn", type: "button", "aria-label": "加成设置：边界、接收器、必选", title: "边界、接收器、必选", "aria-expanded": String(open), onclick: toggle },
+          "加成", el("span", { class: "chev", "aria-hidden": "true" }, "▾")),
+        locked ? null : el("button", { class: "del", type: "button", "aria-label": `删除 ${it.name || it.type}`, title: "删除",
+          onclick: () => { state.items.splice(r, 1); openRow = -1; invalidate(); } }, "×")));
+    if (!open) return [main];
+    return [main, el("tr", { class: "detail" }, el("td", { colspan: 7 }, settingsPanel(it)))];
   });
   $("#rows").replaceChildren(...rows);
   $("#emptyHint").hidden = rows.length > 0;
   $("#clearBtn").disabled = rows.length === 0;
+  $("#editBtn").setAttribute("aria-pressed", String(state.editing));
+  $("#editBtn").textContent = state.editing ? "✓ 完成编辑" : "✎ 编辑";
   const total = state.items.reduce((s, it) => s + it.qty, 0);
   $("#count").textContent = `${state.items.length} 种 · 共 ${total} 件`;
+}
+
+/** Shape picker of one item (built-in and custom shapes). */
+function typeSelect(it) {
+  const types = [...Object.keys(SHAPES), ...customShapes.map((c) => c.name)];
+  if (!types.includes(it.type)) types.push(it.type); // custom shape deleted from the palette
+  return el("select", { "aria-label": "形状", disabled: !state.editing, onchange: (e) => {
+    const t = e.target.value;
+    if (SHAPES[t]) delete it.cells; else it.cells = customCells(t) || it.cells;
+    it.type = t;
+    invalidate();
+  } }, ...types.map((t) => el("option", { value: t, selected: t === it.type }, t)));
+}
+
+/** The bonus settings of one item: border sides, receiver, required. */
+function settingsPanel(it) {
+  const sides = el("div", { class: "sides row", role: "group", "aria-label": "边界奖励（可多选）" },
+    ...SIDES.map(([side, label]) => el("button", {
+      type: "button", "aria-pressed": String(it.border.includes(side)), "aria-label": `${label}边界`,
+      onclick: () => {
+        it.border = it.border.includes(side) ? it.border.filter((b) => b !== side)
+          : [...it.border.filter((b) => b !== OPPOSITE[side]), side];
+        invalidate();
+      },
+    }, label)));
+  const check = (key, text) => el("label", { class: "field check" },
+    el("input", { type: "checkbox", checked: it[key], onchange: (e) => { it[key] = e.target.checked; invalidate(); } }), text);
+  return el("div", { class: "settings" },
+    el("div", { class: "field" }, el("span", {}, "边界"), sides, el("small", {}, "每边 +20%")),
+    check("adj", "接收器"),
+    check("required", "必选"));
 }
 
 function toInt(v) { const n = Math.floor(Number(v)); return Number.isFinite(n) && n >= 0 ? n : 0; }
@@ -880,6 +1070,12 @@ function renderResult() {
 function render() {
   $("#w").value = state.width;
   $("#h").value = state.height;
+  const boardLocked = !!result && !boardEdit;
+  $("#board").classList.toggle("locked", boardLocked);
+  $("#boardHint").hidden = !!result; // with a result the button below says it all
+  $("#boardEditBtn").hidden = !result;
+  $("#boardEditBtn").setAttribute("aria-pressed", String(boardEdit));
+  $("#boardEditBtn").textContent = boardEdit ? "✓ 完成" : "✎ 修改禁用格";
   $("#fastMode").checked = state.fast;
   if (!solving) $("#solveBtn").textContent = solveLabel();
   renderBoard();
@@ -899,7 +1095,7 @@ function buildRequest() {
         ...(SHAPES[it.type] ? { type: it.type } : { shape: it.cells }),
         performance: it.perf, quality: it.qual, efficiency: it.eff, adjBonus: it.adj,
       };
-      if (it.border) item.border = it.border;
+      if (it.border.length) item.border = it.border.length === 1 ? it.border[0] : it.border;
       if (it.required) item.required = true;
       items.push(item);
       rows.push(r);
@@ -975,6 +1171,8 @@ function solve() {
       result.itemsGiven = request.items.length;
       resultRows = rows;
       resultGoal = [...state.goal];
+      solvedState = JSON.stringify(state);
+      boardEdit = false;
       const failed = result.infeasible?.notFound ? "未找到" : "无法达标";
       finish(result.feasible ? "完成" : failed, result.feasible ? "ok" : "err", data.memoryBytes < ENGINE_MEMORY_LIMIT);
       render();
@@ -1008,7 +1206,7 @@ function importJson(text) {
     }
     return {
       type, ...(SHAPES[type] ? {} : { cells: customCells(type) }), name: it.name || "", perf: toSigned(it.performance ?? it.value), qual: toSigned(it.quality),
-      eff: toSigned(it.efficiency), border: it.border || "", adj: !!it.adjBonus, required: !!it.required, qty: 1,
+      eff: toSigned(it.efficiency), border: toSides(it.border), adj: !!it.adjBonus, required: !!it.required, qty: 1,
     };
   });
   const goal = ATTRS.map(([name], a) => p.goal?.[name] ?? (a === 0 ? "max" : "skip"));
@@ -1037,9 +1235,17 @@ async function init() {
   $("#h").addEventListener("change", (e) => setDim("height", e.target));
   $("#solveBtn").addEventListener("click", solve);
   $("#fastMode").addEventListener("change", (e) => { state.fast = e.target.checked; save(); render(); });
+  $("#boardEditBtn").addEventListener("click", () => { boardEdit = !boardEdit; render(); });
+  $("#editBtn").addEventListener("click", (e) => {
+    e.preventDefault(); // inside <summary>: don't fold the list
+    state.editing = !state.editing;
+    if (state.editing) $("#itemList").open = true; // nothing to edit in a folded list
+    save(); renderRows();
+  });
   $("#clearBtn").addEventListener("click", () => {
     if (!confirm(`清空全部 ${state.items.length} 种物品？（预设组不受影响）`)) return;
     state.items = [];
+    openRow = -1;
     $("#itemList").open = true;
     invalidate();
     setStatus("已清空物品", "ok");

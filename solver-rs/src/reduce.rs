@@ -25,7 +25,7 @@ pub fn reduce(p: &Problem, limit: usize) -> (Problem, Vec<usize>) {
     let mut groups: HashMap<_, Vec<usize>> = HashMap::new();
     for (i, it) in p.items.iter().enumerate() {
         groups
-            .entry((shape_key(&it.shape), it.border, it.adj_bonus))
+            .entry((shape_key(&it.shape), it.border.clone(), it.adj_bonus))
             .or_default()
             .push(i);
     }
